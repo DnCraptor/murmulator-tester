@@ -12,7 +12,7 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico2 CACHE STRING "Board type")
+set(PICO_BOARD pico CACHE STRING "Board type")
 
 cmake_minimum_required(VERSION 3.22)
 include(pico_sdk_import.cmake)
@@ -40,8 +40,6 @@ if(NOT FLASH_SIZE)
 endif ()
 
 set(FIRMWARE_OFFSET 64)
-
-SET(BUILD_NAME "m1p2-${PROJECT_NAME}")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -80,7 +78,7 @@ message(STATUS "")
 add_executable(${PROJECT_NAME} ${SRC})
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-configure_file(memmap.ld.in memmap.ld @ONLY)
+#configure_file(memmap.ld.in memmap.ld @ONLY)
 #pico_set_linker_script(${PROJECT_NAME} ${CMAKE_CURRENT_BINARY_DIR}/memmap.ld)
 
 pico_set_program_name(${PROJECT_NAME} "Murmulator Tester")
@@ -110,7 +108,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 target_link_options(${PROJECT_NAME} PRIVATE -Xlinker --print-memory-usage)
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/drivers/usb
 )
 
 if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
@@ -176,6 +173,15 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 target_compile_definitions(${PROJECT_NAME} PRIVATE FLASH_SIZE=${FLASH_SIZE})
 target_compile_definitions(${PROJECT_NAME} PRIVATE FIRMWARE_OFFSET=${FIRMWARE_OFFSET})
 
+if (PICO_BOARD MATCHES "pico")
+    SET(BUILD_NAME "m1p1-${PROJECT_NAME}")
+	pico_define_boot_stage2(slower_boot2 ${PICO_DEFAULT_BOOT_STAGE2_FILE})
+	target_compile_definitions(slower_boot2 PRIVATE PICO_FLASH_SPI_CLKDIV=4)
+	pico_set_boot_stage2(${PROJECT_NAME} slower_boot2)
+else ()
+    SET(BUILD_NAME "m1p2-${PROJECT_NAME}")
+endif ()
+
 IF (TFT)
     target_link_libraries(${PROJECT_NAME} PRIVATE st7789)
     target_compile_definitions(${PROJECT_NAME} PRIVATE TFT)
@@ -204,8 +210,6 @@ ELSE()
     SET(BUILD_NAME "${BUILD_NAME}-VGA")
 ENDIF()
 
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "${BUILD_NAME}")
-
 pico_enable_stdio_uart(${PROJECT_NAME} 0)
 pico_enable_stdio_usb(${PROJECT_NAME} 1)
 
@@ -213,3 +217,5 @@ pico_enable_stdio_usb(${PROJECT_NAME} 1)
 #pico_set_binary_type(${PROJECT_NAME} copy_to_ram)
 
 pico_add_extra_outputs(${PROJECT_NAME})
+
+set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "${BUILD_NAME}")
