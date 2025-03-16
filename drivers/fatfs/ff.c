@@ -4845,7 +4845,7 @@ uint32_t f_getfree32(FATFS * fs) {
 	/* Scan FAT to obtain number of free clusters */
 	nfree = 0;
 	if (fs->fs_type == FS_FAT12) {	/* FAT12: Scan bit field FAT entries */
-		clst = 2; obj.fs = &fs;
+		clst = 2; obj.fs = fs;
 		do {
 			stat = get_fat(&obj, clst);
 			if (stat == 0xFFFFFFFF) { return 0; }

@@ -28,8 +28,12 @@ option(TV "Enable TV composite output" OFF)
 option(SOFTTV "Enable TV soft composite output" OFF)
 option(FLASH_SIZE "Target Flash Size" 2048)
 
-set(VGA ON)
+#set(VGA ON)
 #set(HDMI ON)
+#set(TFT ON)
+#set(ILI9341 ON)
+#set(TV ON)
+#set(SOFTTV ON)
 
 if(NOT FLASH_SIZE)
     set(FLASH_SIZE 2048)
