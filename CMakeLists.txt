@@ -35,11 +35,11 @@ option(FLASH_SIZE "Target Flash Size" 2048)
 #set(TV ON)
 #set(SOFTTV ON)
 
+set(VERSION "1.0.1")
+
 if(NOT FLASH_SIZE)
     set(FLASH_SIZE 2048)
 endif ()
-
-set(FIRMWARE_OFFSET 64)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -52,8 +52,9 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
 add_subdirectory(drivers/ps2)
 add_subdirectory(drivers/fatfs)
 add_subdirectory(drivers/sdcard)
-#add_subdirectory(drivers/nespad)
+add_subdirectory(drivers/nespad)
 add_subdirectory(drivers/psram)
+add_subdirectory(drivers/audio)
 
 add_subdirectory(drivers/vga-nextgen)
 add_subdirectory(drivers/st7789)
@@ -82,14 +83,15 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/s
 #pico_set_linker_script(${PROJECT_NAME} ${CMAKE_CURRENT_BINARY_DIR}/memmap.ld)
 
 pico_set_program_name(${PROJECT_NAME} "Murmulator Tester")
-pico_set_program_version(${PROJECT_NAME} "1.0.0")
+pico_set_program_version(${PROJECT_NAME} ${VERSION})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
         ps2
         sdcard
         fatfs
-#        nespad
+        nespad
         psram
+        audio
 
         graphics
 
@@ -99,6 +101,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
         pico_multicore
         hardware_flash
+        hardware_pwm
 
         tinyusb_board
         tinyusb_device
@@ -168,10 +171,16 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
         PSRAM_PIN_SCK=19
         PSRAM_PIN_MOSI=20
         PSRAM_PIN_MISO=21
+
+        PWM_PIN0=26
+        PWM_PIN1=27
+        BEEPER_PIN=28
+
+        AUDIO_DATA_PIN=26
+        AUDIO_CLOCK_PIN=27
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE FLASH_SIZE=${FLASH_SIZE})
-target_compile_definitions(${PROJECT_NAME} PRIVATE FIRMWARE_OFFSET=${FIRMWARE_OFFSET})
 
 if (PICO_BOARD MATCHES "pico")
     SET(BUILD_NAME "m1p1-${PROJECT_NAME}")
@@ -209,6 +218,8 @@ ELSE()
     target_link_libraries(${PROJECT_NAME} PRIVATE vga-nextgen)
     SET(BUILD_NAME "${BUILD_NAME}-VGA")
 ENDIF()
+
+SET(BUILD_NAME "${BUILD_NAME}-${VERSION}")
 
 pico_enable_stdio_uart(${PROJECT_NAME} 0)
 pico_enable_stdio_usb(${PROJECT_NAME} 1)
