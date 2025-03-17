@@ -35,7 +35,7 @@ option(FLASH_SIZE "Target Flash Size" 2048)
 #set(TV ON)
 #set(SOFTTV ON)
 
-set(VERSION "1.0.2")
+set(VERSION "1.0.4")
 
 if(NOT FLASH_SIZE)
     set(FLASH_SIZE 2048)

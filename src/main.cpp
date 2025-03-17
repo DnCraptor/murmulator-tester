@@ -215,6 +215,8 @@ static void PWM_init_pin(uint8_t pinN, uint16_t max_lvl) {
     pwm_init(pwm_gpio_to_slice_num(pinN), &config, true);
 }
 
+#define short_light 200 
+
 int main() {
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
@@ -222,15 +224,23 @@ int main() {
     stdio_init_all();
     printf("Starting...\n");
 
+    /// TODO: настройка
+#if PICO_RP2040
+    hw_set_bits(&vreg_and_chip_reset_hw->vreg, VREG_AND_CHIP_RESET_VREG_VSEL_BITS);
+    sleep_ms(10);
+#else
+    vreg_set_voltage(VREG_VOLTAGE_1_30);
+    sleep_ms(33);
+#endif
     set_sys_clock_khz(252 * KHZ, 0);
 
     printf("252 MHz\n");
 
     /// startup signal
     for (int i = 0; i < 2; i++) {
-        sleep_ms(50);
+        sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, true);
-        sleep_ms(50);
+        sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, false);
     }
 
@@ -252,9 +262,9 @@ int main() {
 
     /// vga-done startup signal
     for (int i = 0; i < 4; i++) {
-        sleep_ms(50);
+        sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, true);
-        sleep_ms(50);
+        sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, false);
     }
 
@@ -265,7 +275,7 @@ int main() {
     sleep_ms(250);
 
     int y = 2;
-    draw_text("252 MHz board was started, without overvoltage", 0, y++, 7, 0);
+    draw_text("The board was started with 252 MHz 1.3V", 0, y++, 7, 0);
     if (videoLinks) {
         draw_text("Video out was tested with issues", 0, y++, 12, 0);
         draw_text(" (try disconnect video cable)", 0, y++, 12, 0);
@@ -426,9 +436,9 @@ int main() {
     draw_text("I - try i2s sound (+L/R)", 0, y, 7, 0);
 
     for (int i = 0; i < 8; i++) {
-        sleep_ms(33);
+        sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, true);
-        sleep_ms(33);
+        sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, false);
     }
 
