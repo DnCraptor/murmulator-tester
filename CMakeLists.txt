@@ -12,7 +12,7 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico2 CACHE STRING "Board type")
+set(PICO_BOARD pico CACHE STRING "Board type")
 
 cmake_minimum_required(VERSION 3.22)
 include(pico_sdk_import.cmake)
@@ -35,7 +35,7 @@ option(FLASH_SIZE "Target Flash Size" 2048)
 #set(TV ON)
 #set(SOFTTV ON)
 
-set(VERSION "1.0.1")
+set(VERSION "1.0.2")
 
 if(NOT FLASH_SIZE)
     set(FLASH_SIZE 2048)
@@ -105,6 +105,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
         tinyusb_board
         tinyusb_device
+        pico_stdio_usb
 )
 
 #family_configure_device_example(${PROJECT_NAME} noos)

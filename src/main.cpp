@@ -218,6 +218,8 @@ static void PWM_init_pin(uint8_t pinN, uint16_t max_lvl) {
 int main() {
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+
+    stdio_init_all();
     printf("Starting...\n");
 
     set_sys_clock_khz(252 * KHZ, 0);
