@@ -12,7 +12,7 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico CACHE STRING "Board type")
+set(PICO_BOARD pico2 CACHE STRING "Board type")
 
 cmake_minimum_required(VERSION 3.22)
 include(pico_sdk_import.cmake)
@@ -182,13 +182,13 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE FLASH_SIZE=${FLASH_SIZE})
 
-if (PICO_BOARD MATCHES "pico")
-    SET(BUILD_NAME "m1p1-${PROJECT_NAME}")
-	pico_define_boot_stage2(slower_boot2 ${PICO_DEFAULT_BOOT_STAGE2_FILE})
-	target_compile_definitions(slower_boot2 PRIVATE PICO_FLASH_SPI_CLKDIV=4)
-	pico_set_boot_stage2(${PROJECT_NAME} slower_boot2)
-else ()
+if (PICO_BOARD MATCHES "pico2")
     SET(BUILD_NAME "m1p2-${PROJECT_NAME}")
+else ()
+    SET(BUILD_NAME "m1p1-${PROJECT_NAME}")
+    pico_define_boot_stage2(slower_boot2 ${PICO_DEFAULT_BOOT_STAGE2_FILE})
+    target_compile_definitions(slower_boot2 PRIVATE PICO_FLASH_SPI_CLKDIV=4)
+    pico_set_boot_stage2(${PROJECT_NAME} slower_boot2)
 endif ()
 
 IF (TFT)
