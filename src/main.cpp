@@ -415,13 +415,13 @@ int main() {
             goutf(y++, false, "GPIO %d connected to %d (NES PAD attached?)", pin, pin + 1);
         }
     }
-    nespad_begin(clock_get_hz(clk_sys) / 1000, NES_GPIO_CLK, NES_GPIO_DATA, NES_GPIO_LAT);
     for(uint32_t pin = 26; pin < 27; ++pin) {
         links[pin] = testPinPlus1(pin, "?");
         if (links[pin]) {
             goutf(y++, false, "GPIO %d connected to %d (?)", pin, pin + 1);
         }
     }
+    nespad_begin(clock_get_hz(clk_sys) / 1000, NES_GPIO_CLK, NES_GPIO_DATA, NES_GPIO_LAT);
 
     uint8_t rx[4];
     get_cpu_flash_jedec_id(rx);
@@ -438,7 +438,7 @@ int main() {
         printf("Test write to FLASH - failed\n");
         draw_text("Test write to FLASH - failed", 0, y++, 12, 0);
     }
-
+#if !MURM20
     init_psram();
     uint32_t psram32 = psram_size();
     uint8_t rx8[8];
@@ -447,7 +447,7 @@ int main() {
         goutf(y++, false, "PSRAM %d MB; MF ID: %02x; KGD: %02x; EID: %02X%02X-%02X%02X-%02X%02X",
                           psram32 >> 20, rx8[0], rx8[1], rx8[2], rx8[3], rx8[4], rx8[5], rx8[6], rx8[7]);
 
-        uint32_t a = 0;
+                          uint32_t a = 0;
         uint32_t begin = time_us_32();
         for (; a < psram32; ++a) {
             write8psram(a, a & 0xFF);
@@ -507,7 +507,7 @@ int main() {
     } else {
         goutf(y++, false, "No PSRAM detected");
     }
-
+#endif
     goutf(y++, false, "DONE");
 
     draw_text("S - try speaker, L - try left PWM, R - try right PWM", 0, y++, 7, 0);
