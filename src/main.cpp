@@ -32,6 +32,9 @@ volatile static bool Lpressed = false;
 volatile static bool Rpressed = false;
 volatile static bool Ipressed = false;
 volatile static bool i2s_1nit = false;
+volatile static uint32_t cpu = 0;
+volatile static uint32_t vol = 0;
+
 
 extern "C" {
     #include "audio.h"
@@ -75,7 +78,32 @@ extern "C" {
             altPressed = false;
         }
         else if (ps2scancode == 0x53 && altPressed && ctrlPressed) {
-            watchdog_reboot(0, 0, 0);
+            watchdog_hw->scratch[0] = cpu | (vol << 22);
+            watchdog_enable(1, 0);
+        }
+        else if (ps2scancode == 0x4E) { // +
+            watchdog_hw->scratch[0] = (cpu + 4) | (vol << 22);
+            watchdog_enable(1, 0);
+        }
+        else if (ps2scancode == 0x4A) { // -
+            watchdog_hw->scratch[0] = (cpu - 4) | (vol << 22);
+            watchdog_enable(1, 0);
+        }
+        else if (ps2scancode == 0x52) { // Ins
+            watchdog_hw->scratch[0] = (cpu + 40) | (vol << 22);
+            watchdog_enable(1, 0);
+        }
+        else if (ps2scancode == 0x53) { // Del
+            watchdog_hw->scratch[0] = (cpu - 40) | (vol << 22);
+            watchdog_enable(1, 0);
+        }
+        else if (ps2scancode == 0x49) { // PageUp
+            watchdog_hw->scratch[0] = cpu | ((vol + 1) << 22);
+            watchdog_enable(1, 0);
+        }
+        else if (ps2scancode == 0x51) { // PageDown
+            watchdog_hw->scratch[0] = cpu | ((vol - 1) << 22);
+            watchdog_enable(1, 0);
         }
         return true;
     }
@@ -215,26 +243,80 @@ static void PWM_init_pin(uint8_t pinN, uint16_t max_lvl) {
     pwm_init(pwm_gpio_to_slice_num(pinN), &config, true);
 }
 
-#define short_light 200 
+#define short_light 100
+
+static const char* get_volt() {
+    const char* volt = (const char*)"1.3 V";
+    switch(vol) {
+#if !PICO_RP2040
+        case VREG_VOLTAGE_0_60: volt = "0.6 V"; break;
+        case VREG_VOLTAGE_0_65: volt = "0.65V"; break;
+        case VREG_VOLTAGE_0_70: volt = "0.7 V"; break;
+        case VREG_VOLTAGE_0_75: volt = "0.75V"; break;
+        case VREG_VOLTAGE_0_80: volt = "0.8 V"; break;
+#endif
+        case VREG_VOLTAGE_0_85: volt = "0.85V"; break;
+        case VREG_VOLTAGE_0_90: volt = "0.9 V"; break;
+        case VREG_VOLTAGE_0_95: volt = "0.95V"; break;
+        case VREG_VOLTAGE_1_00: volt = "1.0 V"; break;
+        case VREG_VOLTAGE_1_05: volt = "1.05V"; break;
+        case VREG_VOLTAGE_1_10: volt = "1.1 V"; break;
+        case VREG_VOLTAGE_1_15: volt = "1.15V"; break;
+        case VREG_VOLTAGE_1_20: volt = "1.2 V"; break;
+        case VREG_VOLTAGE_1_25: volt = "1.25V"; break;
+        case VREG_VOLTAGE_1_30: volt = "1.3 V"; break;
+#if !PICO_RP2040
+        // Above this point you will need to set POWMAN_VREG_CTRL_DISABLE_VOLTAGE_LIMIT
+        case VREG_VOLTAGE_1_35: volt = "1.35V"; break;
+        case VREG_VOLTAGE_1_40: volt = "1.4 V"; break;
+        case VREG_VOLTAGE_1_50: volt = "1.5 V"; break;
+        case VREG_VOLTAGE_1_60: volt = "1.6 V"; break;
+        case VREG_VOLTAGE_1_65: volt = "1.65V"; break;
+        case VREG_VOLTAGE_1_70: volt = "1.7 V"; break;
+        case VREG_VOLTAGE_1_80: volt = "1.8 V"; break;
+        case VREG_VOLTAGE_1_90: volt = "1.9 V"; break;
+        case VREG_VOLTAGE_2_00: volt = "2.0 V"; break;
+        case VREG_VOLTAGE_2_35: volt = "2.35V"; break;
+        case VREG_VOLTAGE_2_50: volt = "2.5 V"; break;
+        case VREG_VOLTAGE_2_65: volt = "2.65V"; break;
+        case VREG_VOLTAGE_2_80: volt = "2.8 V"; break;
+        case VREG_VOLTAGE_3_00: volt = "3.0 V"; break;
+        case VREG_VOLTAGE_3_15: volt = "3.15V"; break;
+        case VREG_VOLTAGE_3_30: volt = "3.3 V"; break;
+#endif
+    }
+    return volt;
+}
 
 int main() {
+    auto scratch0 = watchdog_hw->scratch[0];
+    cpu = scratch0 & 0x03FF;
+    vol = (scratch0 & 0xFC00) >> 22;
+    if (!cpu) cpu = 252;
+    if (!vol) vol = VREG_VOLTAGE_1_30;
+
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
 
     stdio_init_all();
-    printf("Starting...\n");
 
-    /// TODO: настройка
+    printf("%d MHz %s\n", cpu, get_volt());
+    if (vol > VREG_VOLTAGE_1_30)
 #if PICO_RP2040
-    hw_set_bits(&vreg_and_chip_reset_hw->vreg, VREG_AND_CHIP_RESET_VREG_VSEL_BITS);
-    sleep_ms(10);
+        vol = VREG_VOLTAGE_1_30;
 #else
-    vreg_set_voltage(VREG_VOLTAGE_1_30);
-    sleep_ms(33);
+        vreg_disable_voltage_limit();
 #endif
-    set_sys_clock_khz(252 * KHZ, 0);
-
-    printf("252 MHz\n");
+    vreg_set_voltage((vreg_voltage)vol);
+    vol = vreg_get_voltage();
+    sleep_ms(33);
+    uint vco, postdiv1, postdiv2;
+    if (check_sys_clock_khz(cpu * KHZ, &vco, &postdiv1, &postdiv2)) {
+        set_sys_clock_pll(vco, postdiv1, postdiv2);
+    } else {
+        cpu = clock_get_hz(clk_sys) / (KHZ * KHZ);
+    }
+    printf("%d (%d:%d:%d) MHz %s\n", cpu, vco, postdiv1, postdiv2, get_volt());
 
     /// startup signal
     for (int i = 0; i < 2; i++) {
@@ -274,8 +356,8 @@ int main() {
 
     sleep_ms(250);
 
-    int y = 2;
-    draw_text("The board was started with 252 MHz 1.3V", 0, y++, 7, 0);
+    int y = 0;
+    goutf(y++, false, "Started with %d MHz (%d:%d:%d) %s", cpu, vco / (KHZ * KHZ), postdiv1, postdiv2, get_volt());
     if (videoLinks) {
         draw_text("Video out was tested with issues", 0, y++, 12, 0);
         draw_text(" (try disconnect video cable)", 0, y++, 12, 0);
@@ -316,28 +398,24 @@ int main() {
         draw_text("SDCARD port looks ok (no card installed)", 0, y++, 7, 0);
     }
 
-    bool tryKeyboard = false;
+#if !MURM20
     for(uint32_t pin = 0; pin < 2; ++pin) {
+#else
+    for(uint32_t pin = 0; pin < 4; ++pin) {
+#endif
         links[pin] = testPinPlus1(pin, "keyboard?");
         if (links[pin]) {
-            tryKeyboard = true;
             goutf(y++, false, "GPIO %d connected to %d (keyboard?)", pin, pin + 1);
         }
     }
-    if (tryKeyboard) {
-        keyboard_init();
-    }
-    bool tryNespad = false;
+    keyboard_init();
     for(uint32_t pin = NES_GPIO_CLK; pin < 21; ++pin) {
         links[pin] = testPinPlus1(pin, "NES PAD attached?");
         if (links[pin]) {
-            tryNespad = true;
             goutf(y++, false, "GPIO %d connected to %d (NES PAD attached?)", pin, pin + 1);
         }
     }
-    if (tryNespad) {
-        nespad_begin(clock_get_hz(clk_sys) / 1000, NES_GPIO_CLK, NES_GPIO_DATA, NES_GPIO_LAT);
-    }
+    nespad_begin(clock_get_hz(clk_sys) / 1000, NES_GPIO_CLK, NES_GPIO_DATA, NES_GPIO_LAT);
     for(uint32_t pin = 26; pin < 27; ++pin) {
         links[pin] = testPinPlus1(pin, "?");
         if (links[pin]) {
@@ -491,12 +569,11 @@ int main() {
         }
         else {
             sleep_ms(100);
-            if (tryNespad) {
-                nespad_read();
-                goutf(TEXTMODE_ROWS - 2, false, "NES PAD: %02Xh %02Xh ", nespad_state, nespad_state2);
-            }
+            nespad_read();
+            goutf(TEXTMODE_ROWS - 2, false, "NES PAD: %04Xh %04Xh ", nespad_state, nespad_state2);
         }
     }
+    draw_text("Volage - PageUp/PageDown; Freq. - NumPad +/-; Ins/Del", 0, TEXTMODE_ROWS - 3, 7, 0);
 
     __unreachable();
 }

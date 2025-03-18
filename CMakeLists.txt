@@ -26,8 +26,9 @@ option(ILI9341 "Enable TFT ILI9341 display" OFF)
 option(HDMI "Enable HDMI display" OFF)
 option(TV "Enable TV composite output" OFF)
 option(SOFTTV "Enable TV soft composite output" OFF)
-option(FLASH_SIZE "Target Flash Size" 2048)
+option(MURM20 "Murmulator 2.0" OFF)
 
+#set(MURM20 ON)
 #set(VGA ON)
 #set(HDMI ON)
 #set(TFT ON)
@@ -35,11 +36,7 @@ option(FLASH_SIZE "Target Flash Size" 2048)
 #set(TV ON)
 #set(SOFTTV ON)
 
-set(VERSION "1.0.4")
-
-if(NOT FLASH_SIZE)
-    set(FLASH_SIZE 2048)
-endif ()
+set(VERSION "1.0.5")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -131,9 +128,57 @@ target_compile_options(${PROJECT_NAME} PUBLIC
 )
 endif ()
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-        PICO_FLASH_SIZE_BYTES=16777216
+if (MURM20)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        MURM20=1
+        # VGA 8 pins starts from pin:
+        VGA_BASE_PIN=12
 
+        # HDMI 8 pins starts from pin:
+        HDMI_BASE_PIN=12
+
+        # TFT
+        TFT_CS_PIN=12
+        TFT_RST_PIN=14
+        TFT_LED_PIN=15
+        TFT_DC_PIN=16
+        TFT_DATA_PIN=18
+        TFT_CLK_PIN=19
+
+        # SDCARD
+        SDCARD_PIN_SPI0_CS=5
+        SDCARD_PIN_SPI0_SCK=6
+        SDCARD_PIN_SPI0_MOSI=7
+        SDCARD_PIN_SPI0_MISO=4
+
+        # PS2 keyboard
+        KBD_CLOCK_PIN=2
+        KBD_DATA_PIN=3
+
+        # NES Gamepad
+        NES_GPIO_CLK=20
+        NES_GPIO_LAT=21
+        NES_GPIO_DATA=26
+
+        # PSRAM
+        # PSRAM_MUTEX=1
+        PSRAM_SPINLOCK=1
+        PSRAM_ASYNC=1
+
+        PSRAM_PIN_CS=18
+        PSRAM_PIN_SCK=19
+        PSRAM_PIN_MOSI=20
+        PSRAM_PIN_MISO=21
+
+        BEEPER_PIN=9
+        PWM_PIN0=10
+        PWM_PIN1=11
+
+        AUDIO_DATA_PIN=9
+        AUDIO_CLOCK_PIN=10
+    )
+else ()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
         # VGA 8 pins starts from pin:
         VGA_BASE_PIN=6
 
@@ -179,14 +224,21 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 
         AUDIO_DATA_PIN=26
         AUDIO_CLOCK_PIN=27
-)
-
-target_compile_definitions(${PROJECT_NAME} PRIVATE FLASH_SIZE=${FLASH_SIZE})
+    )
+endif ()
 
 if (PICO_BOARD MATCHES "pico2")
-    SET(BUILD_NAME "m1p2-${PROJECT_NAME}")
+    if (MURM20)
+        SET(BUILD_NAME "m2p2-${PROJECT_NAME}")
+    else ()
+        SET(BUILD_NAME "m1p2-${PROJECT_NAME}")
+    endif ()
 else ()
-    SET(BUILD_NAME "m1p1-${PROJECT_NAME}")
+    if (MURM20)
+        SET(BUILD_NAME "m2p1-${PROJECT_NAME}")
+    else ()
+        SET(BUILD_NAME "m1p1-${PROJECT_NAME}")
+    endif ()
     pico_define_boot_stage2(slower_boot2 ${PICO_DEFAULT_BOOT_STAGE2_FILE})
     target_compile_definitions(slower_boot2 PRIVATE PICO_FLASH_SPI_CLKDIV=4)
     pico_set_boot_stage2(${PROJECT_NAME} slower_boot2)
