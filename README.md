@@ -15,7 +15,9 @@ Download the utility from [GitHub](https://github.com/DnCraptor/murmulator-teste
    - There is a **1-second delay** between tests.  
    - If multiple connections exist, count the number of separate blinks.  
 3. Afterward, four very short LED blinks occur, and the program attempts to start the video output.  
-4. Further **on-screen output should be self-explanatory**.  
+4. Further **on-screen output should be self-explanatory**.
+5. A short-term loss of the image during the test is normal - the recording to the internal flash is being tested.
+6. After the Done line is drawn, 8 short flashes are expected.
 
 ### Additional Notes:
 - **Red text usually indicates an error**.  
