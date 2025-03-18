@@ -1,7 +1,9 @@
 Download the utility from [GitHub](https://github.com/DnCraptor/murmulator-tester/releases).  
 
-- **m1p1** – for Raspberry Pi Pico (or RP2040-compatible devices).  
-- **m1p2** – for Raspberry Pi Pico 2 (or RP2350-compatible devices).  
+- **m1p1** – for Murmulator 1.x Raspberry Pi Pico (or RP2040-compatible devices).  
+- **m1p2** – for Murmulator 1.x Raspberry Pi Pico 2 (or RP2350-compatible devices).  
+- **m2p1** – for Murmulator 2.0 Raspberry Pi Pico (or RP2040-compatible devices).  
+- **m2p2** – for Murmulator 2.0 Raspberry Pi Pico 2 (or RP2350-compatible devices).  
 
 ### Important Notes:
 - Pay attention to the **video output type** you are using. For example, the **HDMI version will not properly test VGA**, and vice versa.  
