@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <cstring>
+#include <math.h>
 #include <pico.h>
 #include <hardware/vreg.h>
 #include <hardware/clocks.h>
@@ -11,7 +12,9 @@
 #include <hardware/pwm.h>
 
 #include "graphics.h"
+#ifndef MURM20
 #include "psram_spi.h"
+#endif
 #include "nespad.h"
 #include "ff.h"
 
@@ -34,7 +37,89 @@ volatile static bool Ipressed = false;
 volatile static bool i2s_1nit = false;
 volatile static uint32_t cpu = 0;
 volatile static uint32_t vol = 0;
+const int samples = 64;
+static uint16_t samplesL[2][samples];
+static uint16_t samplesR[2][samples];
+static uint16_t samplesLR[2][samples];
 
+#if !PICO_RP2040
+#include <hardware/structs/qmi.h>
+#include <hardware/structs/xip.h>
+void __no_inline_not_in_flash_func(psram_init)(uint cs_pin) {
+    gpio_set_function(cs_pin, GPIO_FUNC_XIP_CS1);
+
+    // Enable direct mode, PSRAM CS, clkdiv of 10.
+    qmi_hw->direct_csr = 10 << QMI_DIRECT_CSR_CLKDIV_LSB | \
+                               QMI_DIRECT_CSR_EN_BITS | \
+                               QMI_DIRECT_CSR_AUTO_CS1N_BITS;
+    while (qmi_hw->direct_csr & QMI_DIRECT_CSR_BUSY_BITS)
+        ;
+
+    // Enable QPI mode on the PSRAM
+    const uint CMD_QPI_EN = 0x35;
+    qmi_hw->direct_tx = QMI_DIRECT_TX_NOPUSH_BITS | CMD_QPI_EN;
+
+    while (qmi_hw->direct_csr & QMI_DIRECT_CSR_BUSY_BITS)
+        ;
+
+    // Set PSRAM timing for APS6404
+    //
+    // Using an rxdelay equal to the divisor isn't enough when running the APS6404 close to 133MHz.
+    // So: don't allow running at divisor 1 above 100MHz (because delay of 2 would be too late),
+    // and add an extra 1 to the rxdelay if the divided clock is > 100MHz (i.e. sys clock > 200MHz).
+    const int max_psram_freq = 166000000;
+    const int clock_hz = clock_get_hz(clk_sys);
+    int divisor = (clock_hz + max_psram_freq - 1) / max_psram_freq;
+    if (divisor == 1 && clock_hz > 100000000) {
+        divisor = 2;
+    }
+    int rxdelay = divisor;
+    if (clock_hz / divisor > 100000000) {
+        rxdelay += 1;
+    }
+
+    // - Max select must be <= 8us.  The value is given in multiples of 64 system clocks.
+    // - Min deselect must be >= 18ns.  The value is given in system clock cycles - ceil(divisor / 2).
+    const int clock_period_fs = 1000000000000000ll / clock_hz;
+    const int max_select = (125 * 1000000) / clock_period_fs;  // 125 = 8000ns / 64
+    const int min_deselect = (18 * 1000000 + (clock_period_fs - 1)) / clock_period_fs - (divisor + 1) / 2;
+
+    qmi_hw->m[1].timing = 1 << QMI_M1_TIMING_COOLDOWN_LSB |
+                          QMI_M1_TIMING_PAGEBREAK_VALUE_1024 << QMI_M1_TIMING_PAGEBREAK_LSB |
+                          max_select << QMI_M1_TIMING_MAX_SELECT_LSB |
+                          min_deselect << QMI_M1_TIMING_MIN_DESELECT_LSB |
+                          rxdelay << QMI_M1_TIMING_RXDELAY_LSB |
+                          divisor << QMI_M1_TIMING_CLKDIV_LSB;
+
+    // Set PSRAM commands and formats
+    qmi_hw->m[1].rfmt =
+        QMI_M0_RFMT_PREFIX_WIDTH_VALUE_Q << QMI_M0_RFMT_PREFIX_WIDTH_LSB |\
+        QMI_M0_RFMT_ADDR_WIDTH_VALUE_Q   << QMI_M0_RFMT_ADDR_WIDTH_LSB |\
+        QMI_M0_RFMT_SUFFIX_WIDTH_VALUE_Q << QMI_M0_RFMT_SUFFIX_WIDTH_LSB |\
+        QMI_M0_RFMT_DUMMY_WIDTH_VALUE_Q  << QMI_M0_RFMT_DUMMY_WIDTH_LSB |\
+        QMI_M0_RFMT_DATA_WIDTH_VALUE_Q   << QMI_M0_RFMT_DATA_WIDTH_LSB |\
+        QMI_M0_RFMT_PREFIX_LEN_VALUE_8   << QMI_M0_RFMT_PREFIX_LEN_LSB |\
+        6                                << QMI_M0_RFMT_DUMMY_LEN_LSB;
+
+    qmi_hw->m[1].rcmd = 0xEB;
+
+    qmi_hw->m[1].wfmt =
+        QMI_M0_WFMT_PREFIX_WIDTH_VALUE_Q << QMI_M0_WFMT_PREFIX_WIDTH_LSB |\
+        QMI_M0_WFMT_ADDR_WIDTH_VALUE_Q   << QMI_M0_WFMT_ADDR_WIDTH_LSB |\
+        QMI_M0_WFMT_SUFFIX_WIDTH_VALUE_Q << QMI_M0_WFMT_SUFFIX_WIDTH_LSB |\
+        QMI_M0_WFMT_DUMMY_WIDTH_VALUE_Q  << QMI_M0_WFMT_DUMMY_WIDTH_LSB |\
+        QMI_M0_WFMT_DATA_WIDTH_VALUE_Q   << QMI_M0_WFMT_DATA_WIDTH_LSB |\
+        QMI_M0_WFMT_PREFIX_LEN_VALUE_8   << QMI_M0_WFMT_PREFIX_LEN_LSB;
+
+    qmi_hw->m[1].wcmd = 0x38;
+
+    // Disable direct mode
+    qmi_hw->direct_csr = 0;
+
+    // Enable writes to PSRAM
+    hw_set_bits(&xip_ctrl_hw->ctrl, XIP_CTRL_WRITABLE_M1_BITS);
+}
+#endif
 
 extern "C" {
     #include "audio.h"
@@ -108,7 +193,7 @@ extern "C" {
         return true;
     }
 }
-static uint16_t dma_buffer[22050 / 60];
+///static uint16_t dma_buffer[22050 / 60];
 static i2s_config_t i2s_config = {
     .sample_freq = 22050,
     .channel_count = 2,
@@ -117,7 +202,7 @@ static i2s_config_t i2s_config = {
     .pio = pio1,
     .sm = 0,
     .dma_channel = 0,
-    .dma_trans_count = sizeof(dma_buffer) / sizeof(uint32_t), // Number of 32 bits words to transfer
+    .dma_trans_count = 0, ///sizeof(dma_buffer) / sizeof(uint32_t), // Number of 32 bits words to transfer
     .dma_buf = 0,
     .volume = 0, // 16 - is 0
 };
@@ -415,10 +500,15 @@ int main() {
             goutf(y++, false, "GPIO %d connected to %d (NES PAD attached?)", pin, pin + 1);
         }
     }
-    for(uint32_t pin = 26; pin < 27; ++pin) {
-        links[pin] = testPinPlus1(pin, "?");
+    for(uint32_t pin = 26; pin < 28; ++pin) {
+#if !MURM20
+        char* cause = "TDA?";
+#else
+        char* cause = "NES PAD?";
+#endif
+        links[pin] = testPinPlus1(pin, cause);
         if (links[pin]) {
-            goutf(y++, false, "GPIO %d connected to %d (?)", pin, pin + 1);
+            goutf(y++, false, "GPIO %d connected to %d (%s)", pin, pin + 1, cause);
         }
     }
     nespad_begin(clock_get_hz(clk_sys) / 1000, NES_GPIO_CLK, NES_GPIO_DATA, NES_GPIO_LAT);
@@ -527,45 +617,43 @@ int main() {
                 PWM_init_pin(BEEPER_PIN, (1 << 12) - 1);
                 PWM_init_pin(PWM_PIN0  , (1 << 12) - 1);
                 PWM_init_pin(PWM_PIN1  , (1 << 12) - 1);
-                draw_text(" (restart to test i2s)   ", 0, y, 7, 0);
+                draw_text(" (Ctrl+Alt+Del - restart to test i2s) ", 0, y, 7, 0);
                 pwm_init = true;
             }
             if (Spressed) pwm_set_gpio_level(BEEPER_PIN, (1 << 12) - 1);
-            if (Lpressed) pwm_set_gpio_level(PWM_PIN0  , (1 << 12) - 1);
-            if (Rpressed) pwm_set_gpio_level(PWM_PIN1  , (1 << 12) - 1);
+            if (Rpressed) pwm_set_gpio_level(PWM_PIN0  , (1 << 12) - 1);
+            if (Lpressed) pwm_set_gpio_level(PWM_PIN1  , (1 << 12) - 1);
             sleep_ms(1);
             if (Spressed) pwm_set_gpio_level(BEEPER_PIN, 0);
-            if (Lpressed) pwm_set_gpio_level(PWM_PIN0  , 0);
-            if (Rpressed) pwm_set_gpio_level(PWM_PIN1  , 0);
+            if (Rpressed) pwm_set_gpio_level(PWM_PIN0  , 0);
+            if (Lpressed) pwm_set_gpio_level(PWM_PIN1  , 0);
             sleep_ms(1);
         }
         else if (!pwm_init && Ipressed) {
             if (!i2s_1nit) {
-                draw_text(" (restart to test PWM)                               ", 0, y - 1, 7, 0);
+                draw_text(" (Ctrl+Alt+Del - restart to test PWM)                         ", 0, y - 1, 7, 0);
                 i2s_init(&i2s_config);
+                for (int i = 0; i < samples; ++i) {
+                    double v = (std::sin(2 * 3.1415296 * i / samples) * 32000) + 32000;
+            
+                    samplesL[0][i] = v;
+                    samplesL[1][i] = 0;
+            
+                    samplesR[0][i] = 0;
+                    samplesR[1][i] = v;
+            
+                    samplesLR[0][i] = v;
+                    samplesLR[1][i] = v;
+                }
                 i2s_1nit = true;
             }
         }
         else if (i2s_1nit && (Lpressed || Rpressed)) {
-            uint16_t samples[] = {
-                               0x0000    ,            0x0000    ,
-                    Lpressed ? 0x0FFF : 0, Rpressed ? 0x0FFF : 0,
-                    Lpressed ? 0x1F00 : 0, Rpressed ? 0x1F00 : 0,
-                    Lpressed ? 0x1FFF : 0, Rpressed ? 0x1FFF : 0,
-                    Lpressed ? 0x3FFF : 0, Rpressed ? 0x3FFF : 0,
-                    Lpressed ? 0x5FFF : 0, Rpressed ? 0x5FFF : 0,
-                    Lpressed ? 0x7FFF : 0, Rpressed ? 0x7FFF : 0,
-                    Lpressed ? 0xAFFF : 0, Rpressed ? 0xaFFF : 0,
-                    Lpressed ? 0xFFFF : 0, Rpressed ? 0xFFFF : 0,
-                    Lpressed ? 0xAFFF : 0, Rpressed ? 0xaFFF : 0,
-                    Lpressed ? 0x7FFF : 0, Rpressed ? 0x7FFF : 0,
-                    Lpressed ? 0x5FFF : 0, Rpressed ? 0x5FFF : 0,
-                    Lpressed ? 0x3FFF : 0, Rpressed ? 0x3FFF : 0,
-                    Lpressed ? 0x1F00 : 0, Rpressed ? 0x1F00 : 0,
-                    Lpressed ? 0x1FFF : 0, Rpressed ? 0x1FFF : 0,
-                    Lpressed ? 0x0FFF : 0, Rpressed ? 0x0FFF : 0,
-            };
-            i2s_write(&i2s_config, samples, sizeof(samples) / sizeof(uint32_t));
+            i2s_write(
+                &i2s_config,
+                (uint16_t*)(Lpressed && Rpressed ? samplesLR : (Lpressed ? samplesL : samplesR)),
+                sizeof(samplesL) / sizeof(uint32_t)
+            );
         }
         else {
             sleep_ms(100);
