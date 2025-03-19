@@ -38,9 +38,9 @@ volatile static bool i2s_1nit = false;
 volatile static uint32_t cpu = 0;
 volatile static uint32_t vol = 0;
 const int samples = 64;
-static uint16_t samplesL[2][samples];
-static uint16_t samplesR[2][samples];
-static uint16_t samplesLR[2][samples];
+static int16_t samplesL[2][samples];
+static int16_t samplesR[2][samples];
+static int16_t samplesLR[2][samples];
 
 #if !PICO_RP2040
 #include <hardware/structs/qmi.h>
@@ -512,23 +512,26 @@ int main() {
         }
     }
     nespad_begin(clock_get_hz(clk_sys) / 1000, NES_GPIO_CLK, NES_GPIO_DATA, NES_GPIO_LAT);
-
-    uint8_t rx[4];
-    get_cpu_flash_jedec_id(rx);
-    uint32_t flash_size = (1 << rx[3]);
-    goutf(y++, false, "FLASH %d MB; JEDEC ID: %02X-%02X-%02X-%02X",
-             flash_size >> 20, rx[0], rx[1], rx[2], rx[3]
-    );
-
-    printf("Test flash write ... ");
-    if (write_flash()) {
-        printf("Test write to FLASH - passed\n");
-        draw_text("Test write to FLASH - passed", 0, y++, 7, 0);
-    } else {
-        printf("Test write to FLASH - failed\n");
-        draw_text("Test write to FLASH - failed", 0, y++, 12, 0);
+    if (Spressed || Ipressed) {} else {
+        uint8_t rx[4];
+        get_cpu_flash_jedec_id(rx);
+        uint32_t flash_size = (1 << rx[3]);
+        goutf(y++, false, "FLASH %d MB; JEDEC ID: %02X-%02X-%02X-%02X",
+                 flash_size >> 20, rx[0], rx[1], rx[2], rx[3]
+        );
+    
+        printf("Test flash write ... ");
+        if (write_flash()) {
+            printf("Test write to FLASH - passed\n");
+            draw_text("Test write to FLASH - passed", 0, y++, 7, 0);
+        } else {
+            printf("Test write to FLASH - failed\n");
+            draw_text("Test write to FLASH - failed", 0, y++, 12, 0);
+        }
     }
+    /// TODO: psram_init(pin) - for m2
 #if !MURM20
+    if (Spressed || Ipressed) {} else {
     init_psram();
     uint32_t psram32 = psram_size();
     uint8_t rx8[8];
@@ -537,17 +540,21 @@ int main() {
         goutf(y++, false, "PSRAM %d MB; MF ID: %02x; KGD: %02x; EID: %02X%02X-%02X%02X-%02X%02X",
                           psram32 >> 20, rx8[0], rx8[1], rx8[2], rx8[3], rx8[4], rx8[5], rx8[6], rx8[7]);
 
-                          uint32_t a = 0;
+        uint32_t a = 0;
+        uint32_t elapsed;
         uint32_t begin = time_us_32();
+        double d = 1.0;
+        double speed;
         for (; a < psram32; ++a) {
+            if (Spressed || Ipressed) goto skip_it;
             write8psram(a, a & 0xFF);
         }
-        uint32_t elapsed = time_us_32() - begin;
-        double d = 1.0;
-        double speed = d * a / elapsed;
+        elapsed = time_us_32() - begin;
+        speed = d * a / elapsed;
         goutf(y++, false, "8-bit line write speed: %f MBps", speed);
         begin = time_us_32();
         for (a = 0; a < psram32; ++a) {
+            if (Spressed || Ipressed) goto skip_it;
             if ((a & 0xFF) != read8psram(a)) {
                 goutf(y++, true, "8-bit read failed at %ph", a);
                 break;
@@ -559,6 +566,7 @@ int main() {
     
         begin = time_us_32();
         for (a = 0; a < psram32; a += 2) {
+            if (Spressed || Ipressed) goto skip_it;
             write16psram(a, a & 0xFFFF);
         }
         elapsed = time_us_32() - begin;
@@ -567,6 +575,7 @@ int main() {
    
         begin = time_us_32();
         for (a = 0; a < psram32; a += 2) {
+            if (Spressed || Ipressed) goto skip_it;
             if ((a & 0xFFFF) != read16psram(a)) {
                 goutf(y++, true, "16-bit read failed at %ph", a);
                 break;
@@ -578,6 +587,7 @@ int main() {
     
         begin = time_us_32();
         for (a = 0; a < psram32; a += 4) {
+            if (Spressed || Ipressed) goto skip_it;
             write32psram(a, a);
         }
         elapsed = time_us_32() - begin;
@@ -586,6 +596,7 @@ int main() {
     
         begin = time_us_32();
         for (a = 0; a < psram32; a += 4) {
+            if (Spressed || Ipressed) goto skip_it;
             if (a != read32psram(a)) {
                 goutf(y++, true, "32-bit read failed at %ph", a);
                 break;
@@ -597,11 +608,12 @@ int main() {
     } else {
         goutf(y++, false, "No PSRAM detected");
     }
+    }
 #endif
     goutf(y++, false, "DONE");
-
-    draw_text("S - try speaker, L - try left PWM, R - try right PWM", 0, y++, 7, 0);
-    draw_text("I - try i2s sound (+L/R)", 0, y, 7, 0);
+skip_it:
+    draw_text("S(A) - try speaker, L(SELECT) - left PWM, R(START) - right PWM", 0, y++, 7, 0);
+    draw_text("I(B) - try i2s sound (+L/R)", 0, y, 7, 0);
 
     for (int i = 0; i < 8; i++) {
         sleep_ms(short_light);
@@ -612,7 +624,11 @@ int main() {
 
     bool pwm_init = false;
     while(true) {
-        if (!i2s_1nit && (Spressed || Rpressed || Lpressed)) {
+        bool S = Spressed || (nespad_state & DPAD_A) || (nespad_state2 & DPAD_A);
+        bool I = Ipressed || (nespad_state & DPAD_B) || (nespad_state2 & DPAD_B);
+        bool L = Lpressed || (nespad_state & DPAD_SELECT) || (nespad_state2 & DPAD_SELECT);
+        bool R = Rpressed || (nespad_state & DPAD_START) || (nespad_state2 & DPAD_START);
+        if (!i2s_1nit && (S || R || L)) {
             if (!pwm_init) {
                 PWM_init_pin(BEEPER_PIN, (1 << 12) - 1);
                 PWM_init_pin(PWM_PIN0  , (1 << 12) - 1);
@@ -620,21 +636,23 @@ int main() {
                 draw_text(" (Ctrl+Alt+Del - restart to test i2s) ", 0, y, 7, 0);
                 pwm_init = true;
             }
-            if (Spressed) pwm_set_gpio_level(BEEPER_PIN, (1 << 12) - 1);
-            if (Rpressed) pwm_set_gpio_level(PWM_PIN0  , (1 << 12) - 1);
-            if (Lpressed) pwm_set_gpio_level(PWM_PIN1  , (1 << 12) - 1);
+            if (S) pwm_set_gpio_level(BEEPER_PIN, (1 << 12) - 1);
+            if (R) pwm_set_gpio_level(PWM_PIN0  , (1 << 12) - 1);
+            if (L) pwm_set_gpio_level(PWM_PIN1  , (1 << 12) - 1);
             sleep_ms(1);
-            if (Spressed) pwm_set_gpio_level(BEEPER_PIN, 0);
-            if (Rpressed) pwm_set_gpio_level(PWM_PIN0  , 0);
-            if (Lpressed) pwm_set_gpio_level(PWM_PIN1  , 0);
+            if (S) pwm_set_gpio_level(BEEPER_PIN, 0);
+            if (R) pwm_set_gpio_level(PWM_PIN0  , 0);
+            if (L) pwm_set_gpio_level(PWM_PIN1  , 0);
             sleep_ms(1);
+            if (nespad_state != 0 || nespad_state2 != 0) goto nespad_again;
         }
-        else if (!pwm_init && Ipressed) {
+        else if (!pwm_init && I) {
             if (!i2s_1nit) {
                 draw_text(" (Ctrl+Alt+Del - restart to test PWM)                         ", 0, y - 1, 7, 0);
+                i2s_config.dma_trans_count = samples >> 1;
                 i2s_init(&i2s_config);
                 for (int i = 0; i < samples; ++i) {
-                    double v = (std::sin(2 * 3.1415296 * i / samples) * 32000) + 32000;
+                    int16_t v = std::sin(2 * 3.1415296 * i / samples) * 32767;
             
                     samplesL[0][i] = v;
                     samplesL[1][i] = 0;
@@ -648,15 +666,16 @@ int main() {
                 i2s_1nit = true;
             }
         }
-        else if (i2s_1nit && (Lpressed || Rpressed)) {
-            i2s_write(
+        else if (i2s_1nit && (L || R)) {
+            i2s_dma_write(
                 &i2s_config,
-                (uint16_t*)(Lpressed && Rpressed ? samplesLR : (Lpressed ? samplesL : samplesR)),
-                sizeof(samplesL) / sizeof(uint32_t)
+                (int16_t*)(L && R ? samplesLR : (L ? samplesL : samplesR))
             );
+            if (nespad_state != 0 || nespad_state2 != 0) goto nespad_again;
         }
         else {
             sleep_ms(100);
+            nespad_again:
             nespad_read();
             goutf(TEXTMODE_ROWS - 2, false, "NES PAD: %04Xh %04Xh ", nespad_state, nespad_state2);
         }

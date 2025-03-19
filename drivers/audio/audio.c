@@ -134,9 +134,9 @@ void i2s_init(i2s_config_t *i2s_config) {
  *             one for the left channel and one for the right channel
  *        len: length of sample in 32 bits words
  */
-void i2s_write(const i2s_config_t *i2s_config, const uint16_t *samples, const size_t len) {
-    for(size_t i = 0; i < len; i++) {
-        pio_sm_put_blocking(i2s_config->pio, i2s_config->sm, (uint32_t)samples[i]);
+void i2s_write(const i2s_config_t *i2s_config, const int16_t *samples, const size_t len) {
+    for(size_t i = 0; i < len; ++i) {
+        pio_sm_put_blocking(i2s_config->pio, i2s_config->sm, ((uint32_t*)samples)[i]);
     }
 }
 
@@ -145,7 +145,7 @@ void i2s_write(const i2s_config_t *i2s_config, const uint16_t *samples, const si
  * i2s_config: I2S context obtained by i2s_get_default_config()
  *     sample: pointer to an array of dma_trans_count x 32 bits samples
  */
-void i2s_dma_write(i2s_config_t *i2s_config, const uint16_t *samples) {
+void i2s_dma_write(i2s_config_t *i2s_config, const int16_t *samples) {
     /* Wait the completion of the previous DMA transfer */
     dma_channel_wait_for_finish_blocking(i2s_config->dma_channel);
     /* Copy samples into the DMA buffer */
