@@ -51,6 +51,10 @@ inline bool isI2S() {
     return Ipressed || (nespad_state & DPAD_B) || (nespad_state2 & DPAD_B);
 }
 
+inline bool isInterrupted() {
+    return isSpeaker() || isI2S();
+}
+
 #if !PICO_RP2040
 #include <hardware/structs/qmi.h>
 #include <hardware/structs/xip.h>
@@ -382,6 +386,18 @@ static const char* get_volt() {
     return volt;
 }
 
+#include <hardware/exception.h>
+
+void sigbus(void) {
+    printf("SIGBUS exception caught...\n");
+    // reset_usb_boot(0, 0);
+}
+void __attribute__((naked, noreturn)) __printflike(1, 0) dummy_panic(__unused const char *fmt, ...) {
+    printf("*** PANIC ***");
+    if (fmt)
+        printf(fmt);
+}
+
 int main() {
     auto scratch0 = watchdog_hw->scratch[0];
     cpu = scratch0 & 0x03FF;
@@ -521,7 +537,7 @@ int main() {
         }
     }
     nespad_begin(clock_get_hz(clk_sys) / 1000, NES_GPIO_CLK, NES_GPIO_DATA, NES_GPIO_LAT);
-    if (isSpeaker() || isI2S()) {} else {
+    if (!isInterrupted()) {
         uint8_t rx[4];
         get_cpu_flash_jedec_id(rx);
         uint32_t flash_size = (1 << rx[3]);
@@ -529,96 +545,99 @@ int main() {
                  flash_size >> 20, rx[0], rx[1], rx[2], rx[3]
         );
     
-        if (isSpeaker() || isI2S()) {} else {
-        printf("Test flash write ... ");
-        if (write_flash()) {
-            printf("Test write to FLASH - passed\n");
-            draw_text("Test write to FLASH - passed", 0, y++, 7, 0);
+        if (!isInterrupted()) {
+            printf("Test flash write ... ");
+            if (write_flash()) {
+                printf("Test write to FLASH - passed\n");
+                draw_text("Test write to FLASH - passed", 0, y++, 7, 0);
+            } else {
+                printf("Test write to FLASH - failed\n");
+                draw_text("Test write to FLASH - failed", 0, y++, 12, 0);
+            }
+            }
+    }
+    exception_set_exclusive_handler(HARDFAULT_EXCEPTION, sigbus);
+#if MURM20
+///    psram_init(8);
+#else
+///    psram_init(19);
+    if (!isInterrupted()) {
+        init_psram();
+        uint32_t psram32 = psram_size();
+        uint8_t rx8[8];
+        psram_id(rx8);
+        if (psram32) {
+            goutf(y++, false, "PSRAM %d MB; MF ID: %02x; KGD: %02x; EID: %02X%02X-%02X%02X-%02X%02X",
+                              psram32 >> 20, rx8[0], rx8[1], rx8[2], rx8[3], rx8[4], rx8[5], rx8[6], rx8[7]);
+    
+            uint32_t a = 0;
+            uint32_t elapsed;
+            uint32_t begin = time_us_32();
+            double d = 1.0;
+            double speed;
+            for (; a < psram32; ++a) {
+                if (isInterrupted()) goto skip_it;
+                write8psram(a, a & 0xFF);
+            }
+            elapsed = time_us_32() - begin;
+            speed = d * a / elapsed;
+            goutf(y++, false, "8-bit line write speed: %f MBps", speed);
+            begin = time_us_32();
+            for (a = 0; a < psram32; ++a) {
+                if (isInterrupted()) goto skip_it;
+                if ((a & 0xFF) != read8psram(a)) {
+                    goutf(y++, true, "8-bit read failed at %ph", a);
+                    break;
+                }
+            }
+            elapsed = time_us_32() - begin;
+            speed = d * a / elapsed;
+            goutf(y++, false, "8-bit line read speed: %f MBps", speed);
+        
+            begin = time_us_32();
+            for (a = 0; a < psram32; a += 2) {
+                if (isInterrupted()) goto skip_it;
+                write16psram(a, a & 0xFFFF);
+            }
+            elapsed = time_us_32() - begin;
+            speed = d * a / elapsed;
+            goutf(y++, false, "16-bit line write speed: %f MBps", speed);
+       
+            begin = time_us_32();
+            for (a = 0; a < psram32; a += 2) {
+                if (isInterrupted()) goto skip_it;
+                if ((a & 0xFFFF) != read16psram(a)) {
+                    goutf(y++, true, "16-bit read failed at %ph", a);
+                    break;
+                }
+            }
+            elapsed = time_us_32() - begin;
+            speed = d * a / elapsed;
+            goutf(y++, false, "16-bit line read speed: %f MBps", speed);
+        
+            begin = time_us_32();
+            for (a = 0; a < psram32; a += 4) {
+                if (isInterrupted()) goto skip_it;
+                write32psram(a, a);
+            }
+            elapsed = time_us_32() - begin;
+            speed = d * a / elapsed;
+            goutf(y++, false, "32-bit line write speed: %f MBps", speed);
+        
+            begin = time_us_32();
+            for (a = 0; a < psram32; a += 4) {
+                if (isInterrupted()) goto skip_it;
+                if (a != read32psram(a)) {
+                    goutf(y++, true, "32-bit read failed at %ph", a);
+                    break;
+                }
+            }
+            elapsed = time_us_32() - begin;
+            speed = d * a / elapsed;
+            goutf(y++, false, "32-bit line read speed: %f MBps", speed);
         } else {
-            printf("Test write to FLASH - failed\n");
-            draw_text("Test write to FLASH - failed", 0, y++, 12, 0);
+            goutf(y++, false, "No PSRAM detected");
         }
-        }
-    }
-    /// TODO: psram_init(pin) - for m2
-#if !MURM20
-    if (isSpeaker() || isI2S()) {} else {
-    init_psram();
-    uint32_t psram32 = psram_size();
-    uint8_t rx8[8];
-    psram_id(rx8);
-    if (psram32) {
-        goutf(y++, false, "PSRAM %d MB; MF ID: %02x; KGD: %02x; EID: %02X%02X-%02X%02X-%02X%02X",
-                          psram32 >> 20, rx8[0], rx8[1], rx8[2], rx8[3], rx8[4], rx8[5], rx8[6], rx8[7]);
-
-        uint32_t a = 0;
-        uint32_t elapsed;
-        uint32_t begin = time_us_32();
-        double d = 1.0;
-        double speed;
-        for (; a < psram32; ++a) {
-            if (isSpeaker() || isI2S()) goto skip_it;
-            write8psram(a, a & 0xFF);
-        }
-        elapsed = time_us_32() - begin;
-        speed = d * a / elapsed;
-        goutf(y++, false, "8-bit line write speed: %f MBps", speed);
-        begin = time_us_32();
-        for (a = 0; a < psram32; ++a) {
-            if (isSpeaker() || isI2S()) goto skip_it;
-            if ((a & 0xFF) != read8psram(a)) {
-                goutf(y++, true, "8-bit read failed at %ph", a);
-                break;
-            }
-        }
-        elapsed = time_us_32() - begin;
-        speed = d * a / elapsed;
-        goutf(y++, false, "8-bit line read speed: %f MBps", speed);
-    
-        begin = time_us_32();
-        for (a = 0; a < psram32; a += 2) {
-            if (isSpeaker() || isI2S()) goto skip_it;
-            write16psram(a, a & 0xFFFF);
-        }
-        elapsed = time_us_32() - begin;
-        speed = d * a / elapsed;
-        goutf(y++, false, "16-bit line write speed: %f MBps", speed);
-   
-        begin = time_us_32();
-        for (a = 0; a < psram32; a += 2) {
-            if (isSpeaker() || isI2S()) goto skip_it;
-            if ((a & 0xFFFF) != read16psram(a)) {
-                goutf(y++, true, "16-bit read failed at %ph", a);
-                break;
-            }
-        }
-        elapsed = time_us_32() - begin;
-        speed = d * a / elapsed;
-        goutf(y++, false, "16-bit line read speed: %f MBps", speed);
-    
-        begin = time_us_32();
-        for (a = 0; a < psram32; a += 4) {
-            if (isSpeaker() || isI2S()) goto skip_it;
-            write32psram(a, a);
-        }
-        elapsed = time_us_32() - begin;
-        speed = d * a / elapsed;
-        goutf(y++, false, "32-bit line write speed: %f MBps", speed);
-    
-        begin = time_us_32();
-        for (a = 0; a < psram32; a += 4) {
-            if (isSpeaker() || isI2S()) goto skip_it;
-            if (a != read32psram(a)) {
-                goutf(y++, true, "32-bit read failed at %ph", a);
-                break;
-            }
-        }
-        elapsed = time_us_32() - begin;
-        speed = d * a / elapsed;
-        goutf(y++, false, "32-bit line read speed: %f MBps", speed);
-    } else {
-        goutf(y++, false, "No PSRAM detected");
-    }
     }
 #endif
     goutf(y++, false, "DONE");
@@ -689,7 +708,7 @@ skip_it:
         }
         if (nstate != nespad_state || nstate2 != nespad_state2)
             goutf(TEXTMODE_ROWS - 2, false, "NES PAD: %04Xh %04Xh ", nespad_state, nespad_state2);
-}
+    }
     draw_text("Volage - PageUp/PageDown; Freq. - NumPad +/-; Ins/Del", 0, TEXTMODE_ROWS - 3, 7, 0);
 
     __unreachable();
