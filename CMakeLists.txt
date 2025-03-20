@@ -36,7 +36,7 @@ set(MURM20 ON)
 #set(TV ON)
 #set(SOFTTV ON)
 
-set(VERSION "1.0.8")
+set(VERSION "1.0.9")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)

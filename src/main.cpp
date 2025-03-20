@@ -38,9 +38,9 @@ volatile static bool i2s_1nit = false;
 volatile static uint32_t cpu = 0;
 volatile static uint32_t vol = 0;
 const int samples = 64;
-static int16_t samplesL[2][samples];
-static int16_t samplesR[2][samples];
-static int16_t samplesLR[2][samples];
+static int16_t samplesL[samples][2];
+static int16_t samplesR[samples][2];
+static int16_t samplesLR[samples][2];
 
 #if !PICO_RP2040
 #include <hardware/structs/qmi.h>
@@ -654,14 +654,14 @@ skip_it:
                 for (int i = 0; i < samples; ++i) {
                     int16_t v = std::sin(2 * 3.1415296 * i / samples) * 32767;
             
-                    samplesL[0][i] = v;
-                    samplesL[1][i] = 0;
+                    samplesL[i][0] = v;
+                    samplesL[i][1] = 0;
             
-                    samplesR[0][i] = 0;
-                    samplesR[1][i] = v;
+                    samplesR[i][0] = 0;
+                    samplesR[i][1] = v;
             
-                    samplesLR[0][i] = v;
-                    samplesLR[1][i] = v;
+                    samplesLR[i][0] = v;
+                    samplesLR[i][1] = v;
                 }
                 i2s_1nit = true;
             }
