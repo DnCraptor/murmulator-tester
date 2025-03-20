@@ -42,6 +42,15 @@ static int16_t samplesL[samples][2];
 static int16_t samplesR[samples][2];
 static int16_t samplesLR[samples][2];
 
+inline bool isSpeaker() {
+    nespad_read();
+    return Spressed || (nespad_state & DPAD_A) || (nespad_state2 & DPAD_A);
+}
+
+inline bool isI2S() {
+    return Ipressed || (nespad_state & DPAD_B) || (nespad_state2 & DPAD_B);
+}
+
 #if !PICO_RP2040
 #include <hardware/structs/qmi.h>
 #include <hardware/structs/xip.h>
@@ -512,7 +521,7 @@ int main() {
         }
     }
     nespad_begin(clock_get_hz(clk_sys) / 1000, NES_GPIO_CLK, NES_GPIO_DATA, NES_GPIO_LAT);
-    if (Spressed || Ipressed) {} else {
+    if (isSpeaker() || isI2S()) {} else {
         uint8_t rx[4];
         get_cpu_flash_jedec_id(rx);
         uint32_t flash_size = (1 << rx[3]);
@@ -520,6 +529,7 @@ int main() {
                  flash_size >> 20, rx[0], rx[1], rx[2], rx[3]
         );
     
+        if (isSpeaker() || isI2S()) {} else {
         printf("Test flash write ... ");
         if (write_flash()) {
             printf("Test write to FLASH - passed\n");
@@ -528,10 +538,11 @@ int main() {
             printf("Test write to FLASH - failed\n");
             draw_text("Test write to FLASH - failed", 0, y++, 12, 0);
         }
+        }
     }
     /// TODO: psram_init(pin) - for m2
 #if !MURM20
-    if (Spressed || Ipressed) {} else {
+    if (isSpeaker() || isI2S()) {} else {
     init_psram();
     uint32_t psram32 = psram_size();
     uint8_t rx8[8];
@@ -546,7 +557,7 @@ int main() {
         double d = 1.0;
         double speed;
         for (; a < psram32; ++a) {
-            if (Spressed || Ipressed) goto skip_it;
+            if (isSpeaker() || isI2S()) goto skip_it;
             write8psram(a, a & 0xFF);
         }
         elapsed = time_us_32() - begin;
@@ -554,7 +565,7 @@ int main() {
         goutf(y++, false, "8-bit line write speed: %f MBps", speed);
         begin = time_us_32();
         for (a = 0; a < psram32; ++a) {
-            if (Spressed || Ipressed) goto skip_it;
+            if (isSpeaker() || isI2S()) goto skip_it;
             if ((a & 0xFF) != read8psram(a)) {
                 goutf(y++, true, "8-bit read failed at %ph", a);
                 break;
@@ -566,7 +577,7 @@ int main() {
     
         begin = time_us_32();
         for (a = 0; a < psram32; a += 2) {
-            if (Spressed || Ipressed) goto skip_it;
+            if (isSpeaker() || isI2S()) goto skip_it;
             write16psram(a, a & 0xFFFF);
         }
         elapsed = time_us_32() - begin;
@@ -575,7 +586,7 @@ int main() {
    
         begin = time_us_32();
         for (a = 0; a < psram32; a += 2) {
-            if (Spressed || Ipressed) goto skip_it;
+            if (isSpeaker() || isI2S()) goto skip_it;
             if ((a & 0xFFFF) != read16psram(a)) {
                 goutf(y++, true, "16-bit read failed at %ph", a);
                 break;
@@ -587,7 +598,7 @@ int main() {
     
         begin = time_us_32();
         for (a = 0; a < psram32; a += 4) {
-            if (Spressed || Ipressed) goto skip_it;
+            if (isSpeaker() || isI2S()) goto skip_it;
             write32psram(a, a);
         }
         elapsed = time_us_32() - begin;
@@ -596,7 +607,7 @@ int main() {
     
         begin = time_us_32();
         for (a = 0; a < psram32; a += 4) {
-            if (Spressed || Ipressed) goto skip_it;
+            if (isSpeaker() || isI2S()) goto skip_it;
             if (a != read32psram(a)) {
                 goutf(y++, true, "32-bit read failed at %ph", a);
                 break;
@@ -624,8 +635,10 @@ skip_it:
 
     bool pwm_init = false;
     while(true) {
-        bool S = Spressed || (nespad_state & DPAD_A) || (nespad_state2 & DPAD_A);
-        bool I = Ipressed || (nespad_state & DPAD_B) || (nespad_state2 & DPAD_B);
+        uint32_t nstate = nespad_state;
+        uint32_t nstate2 = nespad_state2;
+        bool S = isSpeaker();
+        bool I = isI2S();
         bool L = Lpressed || (nespad_state & DPAD_SELECT) || (nespad_state2 & DPAD_SELECT);
         bool R = Rpressed || (nespad_state & DPAD_START) || (nespad_state2 & DPAD_START);
         if (!i2s_1nit && (S || R || L)) {
@@ -644,7 +657,6 @@ skip_it:
             if (R) pwm_set_gpio_level(PWM_PIN0  , 0);
             if (L) pwm_set_gpio_level(PWM_PIN1  , 0);
             sleep_ms(1);
-            if (nespad_state != 0 || nespad_state2 != 0) goto nespad_again;
         }
         else if (!pwm_init && I) {
             if (!i2s_1nit) {
@@ -671,15 +683,13 @@ skip_it:
                 &i2s_config,
                 (int16_t*)(L && R ? samplesLR : (L ? samplesL : samplesR))
             );
-            if (nespad_state != 0 || nespad_state2 != 0) goto nespad_again;
         }
         else {
             sleep_ms(100);
-            nespad_again:
-            nespad_read();
-            goutf(TEXTMODE_ROWS - 2, false, "NES PAD: %04Xh %04Xh ", nespad_state, nespad_state2);
         }
-    }
+        if (nstate != nespad_state || nstate2 != nespad_state2)
+            goutf(TEXTMODE_ROWS - 2, false, "NES PAD: %04Xh %04Xh ", nespad_state, nespad_state2);
+}
     draw_text("Volage - PageUp/PageDown; Freq. - NumPad +/-; Ins/Del", 0, TEXTMODE_ROWS - 3, 7, 0);
 
     __unreachable();
