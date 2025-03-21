@@ -28,6 +28,7 @@ static void goutf(int outline, bool err, const char *__restrict str, ...) {
     draw_text(buf, 0, outline, err ? 12 : 7, 0);
 }
 
+volatile static bool no_butterbod = false;
 volatile static bool ctrlPressed = false;
 volatile static bool altPressed = false;
 volatile static bool Spressed = false;
@@ -58,6 +59,7 @@ inline bool isInterrupted() {
 #if !PICO_RP2040
 #include <hardware/structs/qmi.h>
 #include <hardware/structs/xip.h>
+volatile uint8_t * PSRAM_DATA = (uint8_t*)0x11000000;
 void __no_inline_not_in_flash_func(psram_init)(uint cs_pin) {
     gpio_set_function(cs_pin, GPIO_FUNC_XIP_CS1);
 
@@ -428,6 +430,9 @@ int main() {
     }
     printf("%d (%d:%d:%d) MHz %s\n", cpu, vco, postdiv1, postdiv2, get_volt());
 
+    ///    psram_init(8);
+    psram_init(19);
+
     /// startup signal
     for (int i = 0; i < 2; i++) {
         sleep_ms(short_light);
@@ -519,7 +524,43 @@ int main() {
         }
     }
     keyboard_init();
-    for(uint32_t pin = NES_GPIO_CLK; pin < 21; ++pin) {
+
+    exception_set_exclusive_handler(HARDFAULT_EXCEPTION, sigbus);
+
+    if (1) {
+        goutf(y++, false, "Try Butter-PSRAM test (on GPIO-19)");
+        uint32_t psram32 = 4 << 12;
+        uint32_t a = 0;
+        uint32_t elapsed;
+        uint32_t begin = time_us_32();
+        double d = 1.0;
+        double speed;
+        for (; a < 4 << 12; ++a) {
+            PSRAM_DATA[a] =  a & 0xFF;
+        }
+        elapsed = time_us_32() - begin;
+        speed = d * a / elapsed;
+        goutf(y++, false, "8-bit line write speed: %f MBps", speed);
+        begin = time_us_32();
+        for (a = 0; a < psram32; ++a) {
+            if ((a & 0xFF) != PSRAM_DATA[a]) {
+                goutf(y++, true, "8-bit read failed at %ph", a);
+                no_butterbod = true;
+                break;
+            }
+        }
+        elapsed = time_us_32() - begin;
+        speed = d * a / elapsed;
+        if (!no_butterbod) {
+            goutf(y++, false, "8-bit line read speed: %f MBps", speed);
+        }
+    }
+    if (no_butterbod) {
+        goutf(y++, false, "Butter-PSRAM on GPIO-19 not found");
+    }
+
+    if (no_butterbod)
+    for(uint32_t pin = NES_GPIO_CLK; pin < 21; ++pin) { /// TODO:
         links[pin] = testPinPlus1(pin, "NES PAD attached?");
         if (links[pin]) {
             goutf(y++, false, "GPIO %d connected to %d (NES PAD attached?)", pin, pin + 1);
@@ -556,12 +597,7 @@ int main() {
             }
             }
     }
-    exception_set_exclusive_handler(HARDFAULT_EXCEPTION, sigbus);
-#if MURM20
-///    psram_init(8);
-#else
-///    psram_init(19);
-    if (!isInterrupted()) {
+    if (!isInterrupted() && no_butterbod) {
         init_psram();
         uint32_t psram32 = psram_size();
         uint8_t rx8[8];
@@ -639,7 +675,6 @@ int main() {
             goutf(y++, false, "No PSRAM detected");
         }
     }
-#endif
     goutf(y++, false, "DONE");
 skip_it:
     draw_text("S(A) - try speaker, L(SELECT) - left PWM, R(START) - right PWM", 0, y++, 7, 0);
