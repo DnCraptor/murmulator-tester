@@ -28,7 +28,7 @@ option(TV "Enable TV composite output" OFF)
 option(SOFTTV "Enable TV soft composite output" OFF)
 option(MURM20 "Murmulator 2.0" OFF)
 
-set(MURM20 ON)
+#set(MURM20 ON)
 #set(VGA ON)
 #set(HDMI ON)
 #set(TFT ON)
@@ -171,7 +171,7 @@ if (MURM20)
         PSRAM_PIN_MOSI=20
         PSRAM_PIN_MISO=21
 
-        BUTTER_PSRAM_GPIO=19
+        BUTTER_PSRAM_GPIO=8
 
         BEEPER_PIN=9
         PWM_PIN0=10
@@ -221,7 +221,7 @@ else ()
         PSRAM_PIN_MOSI=20
         PSRAM_PIN_MISO=21
 
-        BUTTER_PSRAM_GPIO=8
+        BUTTER_PSRAM_GPIO=19
 
         PWM_PIN0=26
         PWM_PIN1=27
