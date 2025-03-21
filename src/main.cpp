@@ -430,8 +430,7 @@ int main() {
     }
     printf("%d (%d:%d:%d) MHz %s\n", cpu, vco, postdiv1, postdiv2, get_volt());
 
-    ///    psram_init(8);
-    psram_init(19);
+    psram_init(BUTTER_PSRAM_GPIO);
 
     /// startup signal
     for (int i = 0; i < 2; i++) {
@@ -556,7 +555,7 @@ int main() {
         }
     }
     if (no_butterbod) {
-        goutf(y++, false, "Butter-PSRAM on GPIO-19 not found");
+        goutf(y++, false, "Butter-PSRAM on GPIO-%d not found", BUTTER_PSRAM_GPIO);
     }
 
     if (no_butterbod)
@@ -597,6 +596,7 @@ int main() {
             }
             }
     }
+#if !MURM20
     if (!isInterrupted() && no_butterbod) {
         init_psram();
         uint32_t psram32 = psram_size();
@@ -675,6 +675,7 @@ int main() {
             goutf(y++, false, "No PSRAM detected");
         }
     }
+#endif
     goutf(y++, false, "DONE");
 skip_it:
     draw_text("S(A) - try speaker, L(SELECT) - left PWM, R(START) - right PWM", 0, y++, 7, 0);
