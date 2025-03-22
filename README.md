@@ -23,12 +23,14 @@ Download the utility from [GitHub](https://github.com/DnCraptor/murmulator-teste
 - **Red text usually indicates an error**.  
 - If **SDRAM is soldered and detected**, a **linear read/write test** is performed.  
 - If **NES PAD[s] (joysticks) are connected**, button press codes appear in the bottom row.  
-- If a **PS/2 keyboard is connected**, the second-to-last row shows the scan code of the last pressed key.  
+- If a **PS/2 keyboard is connected**, the second-to-last row shows the scan code of the last pressed key.
+- Butter-brad PSRAM is supported for RP2350 only, and chip-select expected to be on GPIO-19 for Murmulator 1.x, and GPIO-8 on Murmulator 2.0
 
 ### Sound Testing:
 - **Press S, L, or R** to test **PWM audio**.  
 - **Press I** to test **I²S audio**, then **L and/or R** to activate left/right channels.  
-- Multiple keys can be pressed simultaneously to enable all channels.  
+- Multiple keys can be pressed simultaneously to enable all channels.
+- DPAD is mapped as SELECT - Left, START - Right, A - PWM speaker, B - switch to i2s
 
 ### Reset & Restart:
 - Press **Ctrl+Alt+Del** (or the **Reset button** on the board, if available) to reboot.  
