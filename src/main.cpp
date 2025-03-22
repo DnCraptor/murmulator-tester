@@ -28,7 +28,11 @@ static void goutf(int outline, bool err, const char *__restrict str, ...) {
     draw_text(buf, 0, outline, err ? 12 : 7, 0);
 }
 
+#if PICO_RP2040
+volatile static bool no_butterbod = true;
+#else
 volatile static bool no_butterbod = false;
+#endif
 volatile static bool ctrlPressed = false;
 volatile static bool altPressed = false;
 volatile static bool Spressed = false;
@@ -457,7 +461,11 @@ int main() {
     }
     printf("%d (%d:%d:%d) MHz %s\n", cpu, vco, postdiv1, postdiv2, get_volt());
 
+#if PICO_RP2350
+#ifdef BUTTER_PSRAM_GPIO
     psram_init(BUTTER_PSRAM_GPIO);
+#endif
+#endif
 
     /// startup signal
     for (int i = 0; i < 2; i++) {
@@ -560,39 +568,42 @@ int main() {
 #endif
     keyboard_init();
 
-    exception_set_exclusive_handler(HARDFAULT_EXCEPTION, sigbus);
-
-    if (1) {
+#if PICO_RP2350
+    #ifdef BUTTER_PSRAM_GPIO
+    {
+        exception_set_exclusive_handler(HARDFAULT_EXCEPTION, sigbus);
         goutf(y++, false, "Try Butter-PSRAM test (on GPIO-%d)", BUTTER_PSRAM_GPIO);
         uint32_t psram32 = 4 << 12;
         uint32_t a = 0;
         uint32_t elapsed;
         uint32_t begin = time_us_32();
         double d = 1.0;
-        double speed;
+        double speedw, speedr;
         for (; a < 4 << 12; ++a) {
             PSRAM_DATA[a] =  a & 0xFF;
         }
         elapsed = time_us_32() - begin;
-        speed = d * a / elapsed;
-        goutf(y++, false, "8-bit line write speed: %f MBps", speed);
+        speedw = d * a / elapsed;
         begin = time_us_32();
         for (a = 0; a < psram32; ++a) {
             if ((a & 0xFF) != PSRAM_DATA[a]) {
-                goutf(y++, true, "8-bit read failed at %ph", a);
+                goutf(y++, false, "Butter-PSRAM read failed at %ph", PSRAM_DATA+a);
                 no_butterbod = true;
                 break;
             }
         }
         elapsed = time_us_32() - begin;
-        speed = d * a / elapsed;
+        speedr = d * a / elapsed;
         if (!no_butterbod) {
-            goutf(y++, false, "8-bit line read speed: %f MBps", speed);
+            goutf(y++, false, "8-bit line write speed: %f MBps", speedw);
+            goutf(y++, false, "8-bit line read speed: %f MBps", speedr);
+        }
+        if (no_butterbod) {
+            goutf(y++, false, "Butter-PSRAM on GPIO-%d not found", BUTTER_PSRAM_GPIO);
         }
     }
-    if (no_butterbod) {
-        goutf(y++, false, "Butter-PSRAM on GPIO-%d not found", BUTTER_PSRAM_GPIO);
-    }
+    #endif
+#endif
 
     if (no_butterbod)
     for(uint32_t pin = NES_GPIO_CLK; pin < 21; ++pin) { /// TODO:
