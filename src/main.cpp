@@ -494,7 +494,11 @@ int main() {
     }
 
     bool sdcardLinks = false;
-    for(uint32_t pin = SDCARD_PIN_SPI0_SCK; pin < SDCARD_PIN_SPI0_SCK + 4; ++pin) {
+#if MURM20
+    for(uint32_t pin = SDCARD_PIN_SPI0_MISO; pin < SDCARD_PIN_SPI0_MISO + 3; ++pin) {
+#else
+    for(uint32_t pin = SDCARD_PIN_SPI0_SCK; pin < SDCARD_PIN_SPI0_SCK + 3; ++pin) {
+#endif
         links[pin] = testPinPlus1(pin, "SDCARD inserted?");
         if (links[pin]) {
             sdcardLinks = true;
@@ -514,20 +518,31 @@ int main() {
 
 #if !MURM20
     for(uint32_t pin = 0; pin < 2; ++pin) {
-#else
-    for(uint32_t pin = 0; pin < 4; ++pin) {
-#endif
         links[pin] = testPinPlus1(pin, "keyboard?");
         if (links[pin]) {
             goutf(y++, false, "GPIO %d connected to %d (keyboard?)", pin, pin + 1);
         }
     }
+#else
+    for(uint32_t pin = 0; pin < 2; ++pin) {
+        links[pin] = testPinPlus1(pin, "mouse?");
+        if (links[pin]) {
+            goutf(y++, false, "GPIO %d connected to %d (mouse?)", pin, pin + 1);
+        }
+    }
+    for(uint32_t pin = 2; pin < 4; ++pin) {
+        links[pin] = testPinPlus1(pin, "keyboard?");
+        if (links[pin]) {
+            goutf(y++, false, "GPIO %d connected to %d (keyboard?)", pin, pin + 1);
+        }
+    }
+#endif
     keyboard_init();
 
     exception_set_exclusive_handler(HARDFAULT_EXCEPTION, sigbus);
 
     if (1) {
-        goutf(y++, false, "Try Butter-PSRAM test (on GPIO-19)");
+        goutf(y++, false, "Try Butter-PSRAM test (on GPIO-%d)", BUTTER_PSRAM_GPIO);
         uint32_t psram32 = 4 << 12;
         uint32_t a = 0;
         uint32_t elapsed;
