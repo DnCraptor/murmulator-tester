@@ -289,6 +289,7 @@ static void blink(uint32_t pin) {
         gpio_put(PICO_DEFAULT_LED_PIN, false);
         sleep_ms(150);
     }
+    sleep_ms(1000);
 }
 
 static bool testPinPlus1(uint32_t pin, const char* msg) {
@@ -318,8 +319,34 @@ static bool testPinPlus1(uint32_t pin, const char* msg) {
 
     gpio_deinit(pin);
     gpio_deinit(pin + 1);
-    sleep_ms(1000);
     return res;
+}
+
+static bool testPinPulledUpPlus1(uint32_t pin, const char* msg) {
+    bool res = false;
+    gpio_init(pin);
+    gpio_set_dir(pin, GPIO_OUT);
+    sleep_ms(33);
+    gpio_put(pin, false);
+
+    gpio_init(pin + 1);
+    gpio_set_dir(pin + 1, GPIO_IN);
+    gpio_pull_down(pin + 1);
+
+    sleep_ms(33);
+    res = gpio_get(pin + 1);
+    if (!res) {
+        if (msg)
+            printf("GPIO %d connected to %d (%s)\n", pin, pin + 1, msg);
+        else {
+            printf("GPIO %d connected to %d\n", pin, pin + 1);
+            blink(pin);
+        }
+    }
+
+    gpio_deinit(pin);
+    gpio_deinit(pin + 1);
+    return !res;
 }
 
 static void get_cpu_flash_jedec_id(uint8_t _rx[4]) {
@@ -517,24 +544,18 @@ int main() {
     }
 
 #if !MURM20
-    for(uint32_t pin = 0; pin < 2; ++pin) {
-        links[pin] = testPinPlus1(pin, "keyboard?");
-        if (links[pin]) {
-            goutf(y++, false, "GPIO %d connected to %d (keyboard?)", pin, pin + 1);
-        }
+    links[0] = testPinPulledUpPlus1(0, "keyboard");
+    if (links[0]) {
+        goutf(y++, false, "GPIO %d connected to %d (keyboard?)", 0, 1);
     }
 #else
-    for(uint32_t pin = 0; pin < 2; ++pin) {
-        links[pin] = testPinPlus1(pin, "mouse?");
-        if (links[pin]) {
-            goutf(y++, false, "GPIO %d connected to %d (mouse?)", pin, pin + 1);
-        }
+    links[0] = testPinPulledUpPlus1(0, "mouse");
+    if (links[0]) {
+        goutf(y++, false, "GPIO %d connected to %d (mouse?)", 0, 1);
     }
-    for(uint32_t pin = 2; pin < 4; ++pin) {
-        links[pin] = testPinPlus1(pin, "keyboard?");
-        if (links[pin]) {
-            goutf(y++, false, "GPIO %d connected to %d (keyboard?)", pin, pin + 1);
-        }
+    links[2] = testPinPulledUpPlus1(2, "keyboard");
+    if (links[2]) {
+        goutf(y++, false, "GPIO %d connected to %d (keyboard?)", 2, 3);
     }
 #endif
     keyboard_init();
