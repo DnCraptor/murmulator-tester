@@ -12,6 +12,8 @@
 #include "pico/stdlib.h"
 #include "stdlib.h"
 
+extern volatile bool SELECT_VGA;
+
 uint16_t pio_program_VGA_instructions[] = {
     //     .wrap_target
     0x6008, //  0: out    pins, 8
@@ -280,6 +282,10 @@ void __time_critical_func() dma_handler_VGA() {
 }
 
 void graphics_set_mode(enum graphics_mode_t mode) {
+    if (!SELECT_VGA) {
+        graphics_set_mode_hdmi(mode);
+        return;
+    }
     switch (mode) {
         case TEXTMODE_53x30:
             text_buffer_width = 40;
@@ -410,6 +416,10 @@ void graphics_set_mode(enum graphics_mode_t mode) {
 }
 
 void graphics_set_buffer(uint8_t* buffer, const uint16_t width, const uint16_t height) {
+    if (!SELECT_VGA) {
+        graphics_set_buffer_hdmi(buffer, width, height);
+        return;
+    }
     graphics_buffer = buffer;
     graphics_buffer_width = width;
     graphics_buffer_height = height;
@@ -417,6 +427,10 @@ void graphics_set_buffer(uint8_t* buffer, const uint16_t width, const uint16_t h
 
 
 void graphics_set_offset(const int x, const int y) {
+    if (!SELECT_VGA) {
+        graphics_set_offset_hdmi(x, y);
+        return;
+    }
     graphics_buffer_shift_x = x;
     graphics_buffer_shift_y = y;
 }
@@ -431,6 +445,10 @@ void graphics_set_textbuffer(uint8_t* buffer) {
 }
 
 void graphics_set_bgcolor(const uint32_t color888) {
+    if (!SELECT_VGA) {
+        graphics_set_bgcolor_hdmi(color888);
+        return;
+    }
     const uint8_t conv0[] = { 0b00, 0b00, 0b01, 0b10, 0b10, 0b10, 0b11, 0b11 };
     const uint8_t conv1[] = { 0b00, 0b01, 0b01, 0b01, 0b10, 0b11, 0b11, 0b11 };
 
@@ -448,6 +466,10 @@ void graphics_set_bgcolor(const uint32_t color888) {
 }
 
 void graphics_set_palette(const uint8_t i, const uint32_t color888) {
+    if (!SELECT_VGA) {
+        graphics_set_palette_hdmi(i, color888);
+        return;
+    }
     const uint8_t conv0[] = { 0b00, 0b00, 0b01, 0b10, 0b10, 0b10, 0b11, 0b11 };
     const uint8_t conv1[] = { 0b00, 0b01, 0b01, 0b01, 0b10, 0b11, 0b11, 0b11 };
 
@@ -464,6 +486,10 @@ void graphics_set_palette(const uint8_t i, const uint32_t color888) {
 }
 
 void graphics_init() {
+    if (!SELECT_VGA) {
+        graphics_init_hdmi();
+        return;
+    }
     //инициализация палитры по умолчанию
 #if 1
     const uint8_t conv0[] = { 0b00, 0b00, 0b01, 0b10, 0b10, 0b10, 0b11, 0b11 };
@@ -571,8 +597,11 @@ void graphics_init() {
 
 
 void clrScr(const uint8_t color) {
+    if (!SELECT_VGA) {
+        clrScr_hdmi(color);
+        return;
+    }
     uint16_t* t_buf = (uint16_t *)text_buffer;
     int size = TEXTMODE_COLS * TEXTMODE_ROWS;
-
     while (size--) *t_buf++ = color << 4 | ' ';
 }

@@ -12,6 +12,9 @@
 #include <hardware/pwm.h>
 
 #include "graphics.h"
+
+extern "C" volatile bool SELECT_VGA = true;
+
 #ifndef MURM20
 #include "psram_spi.h"
 #endif
@@ -227,7 +230,7 @@ static i2s_config_t i2s_config = {
 };
     
 static semaphore vga_start_semaphore;
-static uint16_t SCREEN[TEXTMODE_ROWS][TEXTMODE_COLS];
+static uint16_t SCREEN[TEXTMODE_ROWS][80];
 
 void __time_critical_func(render_core)() {
     multicore_lockout_victim_init();
@@ -289,68 +292,184 @@ static bool __not_in_flash_func(write_flash)(void) {
 static void blink(uint32_t pin) {
     for (uint32_t i = 0; i < pin + 1; ++i) {
         gpio_put(PICO_DEFAULT_LED_PIN, true);
-        sleep_ms(250);
+        sleep_ms(650);
         gpio_put(PICO_DEFAULT_LED_PIN, false);
-        sleep_ms(150);
+        sleep_ms(550);
     }
     sleep_ms(1000);
 }
 
-static bool testPinPlus1(uint32_t pin, const char* msg) {
-    bool res = false;
-    gpio_init(pin);
-    gpio_set_dir(pin, GPIO_OUT);
+// connection is possible 00->00 (external pull down)
+static int test_0000_case(uint32_t pin0, uint32_t pin1, int res) {
+    gpio_init(pin0);
+    gpio_set_dir(pin0, GPIO_OUT);
     sleep_ms(33);
-    gpio_put(pin, false);
+    gpio_put(pin0, 1);
 
-    gpio_init(pin + 1);
-    gpio_set_dir(pin + 1, GPIO_IN);
-    gpio_pull_down(pin + 1);
-
-    gpio_put(pin, true);
+    gpio_init(pin1);
+    gpio_set_dir(pin1, GPIO_IN);
+    gpio_pull_down(pin1); /// external pulled down (so, just to ensure)
     sleep_ms(33);
-    res = gpio_get(pin + 1);
-    if (res) {
-        if (msg)
-            printf("GPIO %d connected to %d (%s)\n", pin, pin + 1, msg);
-        else {
-            printf("GPIO %d connected to %d\n", pin, pin + 1);
-            blink(pin);
-        }
+    if ( gpio_get(pin1) ) { // 1 -> 1, looks really connected
+        res |= (1 << 5) | 1;
     }
-    gpio_put(pin, false);
-    sleep_ms(33);
-
-    gpio_deinit(pin);
-    gpio_deinit(pin + 1);
+    gpio_deinit(pin0);
+    gpio_deinit(pin1);
     return res;
 }
 
-static bool testPinPulledUpPlus1(uint32_t pin, const char* msg) {
-    bool res = false;
-    gpio_init(pin);
-    gpio_set_dir(pin, GPIO_OUT);
+// connection is possible 01->01 (no external pull up/down)
+static int test_0101_case(uint32_t pin0, uint32_t pin1, int res) {
+    gpio_init(pin0);
+    gpio_set_dir(pin0, GPIO_OUT);
     sleep_ms(33);
-    gpio_put(pin, false);
+    gpio_put(pin0, 1);
 
-    gpio_init(pin + 1);
-    gpio_set_dir(pin + 1, GPIO_IN);
-    gpio_pull_down(pin + 1);
-
+    gpio_init(pin1);
+    gpio_set_dir(pin1, GPIO_IN);
+    gpio_pull_down(pin1);
     sleep_ms(33);
-    res = gpio_get(pin + 1);
-    if (!res) {
-        if (msg)
-            printf("GPIO %d connected to %d (%s)\n", pin, pin + 1, msg);
-        else {
-            printf("GPIO %d connected to %d\n", pin, pin + 1);
-            blink(pin);
+    if ( gpio_get(pin1) ) { // 1 -> 1, looks really connected
+        res |= (1 << 5) | 1;
+    }
+    gpio_deinit(pin0);
+    gpio_deinit(pin1);
+    return res;
+}
+
+// connection is possible 11->11 (externally pulled up)
+static int test_1111_case(uint32_t pin0, uint32_t pin1, int res) {
+    gpio_init(pin0);
+    gpio_set_dir(pin0, GPIO_OUT);
+    sleep_ms(33);
+    gpio_put(pin0, 0);
+
+    gpio_init(pin1);
+    gpio_set_dir(pin1, GPIO_IN);
+    gpio_pull_up(pin1); /// external pulled up (so, just to ensure)
+    sleep_ms(33);
+    if ( !gpio_get(pin1) ) { // 0 -> 0, looks really connected
+        res |= 1;
+    }
+    gpio_deinit(pin0);
+    gpio_deinit(pin1);
+    return res;
+}
+
+static int testPins(uint32_t pin0, uint32_t pin1) {
+    int res = 0b000000;
+#if PICO_RP2350
+    /// do not try to test butter psram this way
+    if (pin0 == BUTTER_PSRAM_GPIO || pin1 == BUTTER_PSRAM_GPIO) return res;
+    if (pin0 == 23 || pin1 == 23) return res; // SMPS Power
+    if (pin0 == 24 || pin1 == 24) return res; // VBus sense
+    if (pin0 == 25 || pin1 == 25) return res; // LED
+#endif
+    // try pull down case (passive)
+    gpio_init(pin0);
+    gpio_set_dir(pin0, GPIO_IN);
+    gpio_pull_down(pin0);
+    gpio_init(pin1);
+    gpio_set_dir(pin1, GPIO_IN);
+    gpio_pull_down(pin1);
+    sleep_ms(33);
+    int pin0vPD = gpio_get(pin0);
+    int pin1vPD = gpio_get(pin1);
+    gpio_deinit(pin0);
+    gpio_deinit(pin1);
+    /// the same for pull_down state, try pull up case (passive)
+    gpio_init(pin0);
+    gpio_set_dir(pin0, GPIO_IN);
+    gpio_pull_up(pin0);
+    gpio_init(pin1);
+    gpio_set_dir(pin1, GPIO_IN);
+    gpio_pull_up(pin1);
+    sleep_ms(33);
+    int pin0vPU = gpio_get(pin0);
+    int pin1vPU = gpio_get(pin1);
+    gpio_deinit(pin0);
+    gpio_deinit(pin1);
+
+    res = (pin0vPD << 4) | (pin0vPU << 3) | (pin1vPD << 2) | (pin1vPU << 1);
+
+    if (pin0vPD == 1) {
+        if (pin0vPU == 1) { // pin0vPD == 1 && pin0vPU == 1
+            if (pin1vPD == 1) { // pin0vPD == 1 && pin0vPU == 1 && pin1vPD == 1
+                if (pin1vPU == 1) { // pin0vPD == 1 && pin0vPU == 1 && pin1vPD == 1 && pin1vPU == 1
+                    // connection is possible 11->11 (externally pulled up)
+                    return test_1111_case(pin0, pin1, res);
+                } else { // pin0vPD == 1 && pin0vPU == 1 && pin1vPD == 1 && pin1vPU == 0
+                    // connection is impossible
+                    return res;
+                }
+            } else { // pin0vPD == 1 && pin0vPU == 1 && pin1vPD == 0
+                if (pin1vPU == 1) { // pin0vPD == 1 && pin0vPU == 1 && pin1vPD == 0 && pin1vPU == 1
+                    // connection is impossible
+                    return res;
+                } else { // pin0vPD == 1 && pin0vPU == 1 && pin1vPD == 0 && pin1vPU == 0
+                    // connection is impossible
+                    return res;
+                }
+            }
+        } else {  // pin0vPD == 1 && pin0vPU == 0
+            if (pin1vPD == 1) { // pin0vPD == 1 && pin0vPU == 0 && pin1vPD == 1
+                if (pin1vPU == 1) { // pin0vPD == 1 && pin0vPU == 0 && pin1vPD == 1 && pin1vPU == 1
+                    // connection is impossible
+                    return res;
+                } else { // pin0vPD == 1 && pin0vPU == 0 && pin1vPD == 1 && pin1vPU == 0
+                    // connection is possible 10->10 (pulled up on down, and pulled down on up?)
+                    return res |= (1 << 5) | 1; /// NOT SURE IT IS POSSIBLE TO TEST SUCH CASE (TODO: think about real cases)
+                }
+            } else { // pin0vPD == 1 && pin0vPU == 0 && pin1vPD == 0
+                if (pin1vPU == 1) { // pin0vPD == 1 && pin0vPU == 0 && pin1vPD == 0 && pin1vPU == 1
+                    // connection is impossible
+                    return res;
+                } else { // pin0vPD == 1 && pin0vPU == 0 && pin1vPD == 0 && pin1vPU == 0
+                    // connection is impossible
+                    return res;
+                }
+            }
+        }
+    } else { // pin0vPD == 0
+        if (pin0vPU == 1) { // pin0vPD == 0 && pin0vPU == 1
+            if (pin1vPD == 1) { // pin0vPD == 0 && pin0vPU == 1 && pin1vPD == 1
+                if (pin1vPU == 1) { // pin0vPD == 0 && pin0vPU == 1 && pin1vPD == 1 && pin1vPU == 1
+                    // connection is impossible
+                    return res;
+                } else { // pin0vPD == 0 && pin0vPU == 1 && pin1vPD == 1 && pin1vPU == 0
+                    // connection is impossible
+                    return res;
+                }
+            } else { // pin0vPD == 0 && pin0vPU == 1 && pin1vPD == 0
+                if (pin1vPU == 1) { // pin0vPD == 0 && pin0vPU == 1 && pin1vPD == 0 && pin1vPU == 1
+                    // connection is possible 01->01 (no external pull up/down)
+                    return test_0101_case(pin0, pin1, res);
+                } else { // pin0vPD == 0 && pin0vPU == 1 && pin1vPD == 0 && pin1vPU == 0
+                    // connection is impossible
+                    return res;
+                }
+            }
+        } else {  // pin0vPD == 0 && pin0vPU == 0
+            if (pin1vPD == 1) { // pin0vPD == 0 && pin0vPU == 0 && pin1vPD == 1
+                if (pin1vPU == 1) { // pin0vPD == 0 && pin0vPU == 0 && pin1vPD == 1 && pin1vPU == 1
+                    // connection is impossible
+                    return res;
+                } else { // pin0vPD == 0 && pin0vPU == 0 && pin1vPD == 1 && pin1vPU == 0
+                    // connection is impossible
+                    return res;
+                }
+            } else { // pin0vPD == 0 && pin0vPU == 0 && pin1vPD == 0
+                if (pin1vPU == 1) { // pin0vPD == 0 && pin0vPU == 0 && pin1vPD == 0 && pin1vPU == 1
+                    // connection is impossible
+                    return res;
+                } else { // pin0vPD == 0 && pin0vPU == 0 && pin1vPD == 0 && pin1vPU == 0
+                    // connection is possible 00->00 (externally pulled down)
+                    return test_0000_case(pin0, pin1, res);
+                }
+            }
         }
     }
-
-    gpio_deinit(pin);
-    gpio_deinit(pin + 1);
-    return !res;
+    return res;
 }
 
 static void get_cpu_flash_jedec_id(uint8_t _rx[4]) {
@@ -431,6 +550,103 @@ void __attribute__((naked, noreturn)) __printflike(1, 0) dummy_panic(__unused co
         printf(fmt);
 }
 
+#ifdef MURM2
+static const bool critical[] = {
+    0, // 00 -> 01
+    0, // 01 -> 02
+    0, // 02 -> 03
+    0, // 03 -> 04
+    0, // 04 -> 05
+    0, // 05 -> 06
+    0, // 06 -> 07
+    0, // 07 -> 08
+    0, // 08 -> 09
+    0, // 09 -> 10
+    0, // 10 -> 11
+    0, // 11 -> 12
+    0, // 12 -> 13
+    0, // 13 -> 14
+    0, // 14 -> 15
+    0, // 15 -> 16
+    0, // 16 -> 17
+    0, // 17 -> 18
+    0, // 18 -> 19
+    0, // 19 -> 20
+    0, // 20 -> 21
+    0, // 21 -> 22
+    0, // 22 -> 23
+    0, // 23 -> 24
+    0, // 24 -> 25
+    0, // 25 -> 26
+    0, // 26 -> 27
+    0, // 27 -> 28
+    0, // 28 -> 29
+};
+#else
+static const bool critical[] = {
+    1, // 00 -> 01 PS/2 kbd clk -> data
+    1, // 01 -> 02 PS/2 kbd data -> sd clk
+    1, // 02 -> 03 sd clk -> sd mosi
+    1, // 03 -> 04 sd mosi -> sd miso
+    1, // 04 -> 05 sd miso -> sd cs
+    1, // 05 -> 06 sd cs -> vga 0
+    0, // 06 -> 07 vga 0 -> vga 1
+    1, // 07 -> 08
+    0, // 08 -> 09 vga 2 -> vga 3
+    1, // 09 -> 10
+    0, // 10 -> 11 vga 4 -> vga 5
+    1, // 11 -> 12
+    0, // 12 -> 13
+    1, // 13 -> 14 vga vs -> nes clk
+    1, // 14 -> 15
+    1, // 15 -> 16
+    1, // 16 -> 17
+    1, // 17 -> 18
+    1, // 18 -> 19
+    1, // 19 -> 20
+    0, // 20 -> 21 psram
+    1, // 21 -> 22
+    1, // 22 -> 23
+    1, // 23 -> 24
+    1, // 24 -> 25
+    1, // 25 -> 26
+    1, // 26 -> 27
+    1, // 27 -> 28
+    1, // 28 -> 29
+};
+static const char* const desc[] = {
+    "KBD", // 00 -> 01 PS/2 kbd clk -> data
+    "KBD SD", // 01 -> 02 PS/2 kbd data -> sd clk
+    "SD", // 02 -> 03 sd clk -> sd mosi
+    "SD", // 03 -> 04 sd mosi -> sd miso
+    "SD", // 04 -> 05 sd miso -> sd cs
+    "SD VIDEO", // 05 -> 06 sd cs -> vga 0
+    "VGA B", // 06 -> 07 vga 0 -> vga 1
+    "VIDEO", // 07 -> 08
+    "VGA G", // 08 -> 09 vga 2 -> vga 3
+    "VIDEO", // 09 -> 10
+    "VGA R", // 10 -> 11 vga 4 -> vga 5
+    "VIDEO", // 11 -> 12
+    "HDMI?", // 12 -> 13
+    "VIDEO NES", // 13 -> 14 vga vs -> nes clk
+    "NES", // 14 -> 15
+    "NES", // 15 -> 16
+    "NES", // 16 -> 17
+    "NES PSRAM", // 17 -> 18
+    "PSRAM", // 18 -> 19
+    "PSRAM", // 19 -> 20
+    "PSRAM", // 20 -> 21 psram
+    "PSRAM LOADIN", // 21 -> 22
+    "", // 22 -> 23
+    "", // 23 -> 24
+    "", // 24 -> 25
+    "", // 25 -> 26
+    "I2S", // 26 -> 27
+    "I2S", // 27 -> 28
+    "I2S", // 28 -> 29
+};
+#endif
+
 int main() {
     auto scratch0 = watchdog_hw->scratch[0];
     cpu = scratch0 & 0x03FF;
@@ -474,31 +690,28 @@ int main() {
         sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, false);
     }
+    sleep_ms(1000);
 
-    bool links[32] = { false };
-    bool videoLinks = false;
-    bool frenkLinks = false;
+    int links[27] = { false };
+    for(uint32_t pin = 0; pin < 27; ++pin) {
+        links[pin] = testPins(pin, pin + 1);
+    }
+    SELECT_VGA = (links[VGA_BASE_PIN] == 0) || (links[VGA_BASE_PIN] == 0x1F);
     for(uint32_t pin = VGA_BASE_PIN; pin < VGA_BASE_PIN + 7; ++pin) {
-        if (pin == VGA_BASE_PIN || pin == VGA_BASE_PIN + 2 || pin == VGA_BASE_PIN + 4) {
-            #ifdef VGA
-            continue;
-            #endif
-            links[pin] = testPinPlus1(pin, 0);
-            if (links[pin]) frenkLinks = true;
-        } else {
-            links[pin] = testPinPlus1(pin, 0);
-            if (links[pin]) videoLinks = true;
+        if ((links[pin] & 0b000001) && (!SELECT_VGA || critical[pin])) {
+            blink(pin);
         }
     }
 
-    /// vga-done startup signal
+    sleep_ms(1000);
+    /// main test DONE signal
     for (int i = 0; i < 4; i++) {
         sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, true);
         sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, false);
     }
-
+    
     sem_init(&vga_start_semaphore, 0, 1);
     multicore_launch_core1(render_core);
     sem_release(&vga_start_semaphore);
@@ -507,65 +720,43 @@ int main() {
 
     int y = 0;
     goutf(y++, false, "Started with %d MHz (%d:%d:%d) %s", cpu, vco / (KHZ * KHZ), postdiv1, postdiv2, get_volt());
-    if (videoLinks) {
-        draw_text("Video out was tested with issues", 0, y++, 12, 0);
-        draw_text(" (try disconnect video cable)", 0, y++, 12, 0);
-        for(uint32_t pin = VGA_BASE_PIN; pin < VGA_BASE_PIN + 7; ++pin) {
-            if (links[pin]) {
-                goutf(y++, false, "GPIO %d connected to %d", pin, pin + 1);
-            }
-        }
-    } else {
-        if (frenkLinks) {
-            draw_text("Video out was tested with issues, may be Frank board", 0, y++, 7, 0);
-            for(uint32_t pin = VGA_BASE_PIN; pin < VGA_BASE_PIN + 7; ++pin) {
-                if (links[pin]) {
-                    goutf(y++, false, "GPIO %d connected to %d", pin, pin + 1);
-                }
-            }
-        } else {
-            draw_text("Video out was started", 0, y++, 7, 0);
-        }
-    }
+/*
+    static const int vga_disconnected[7]    = { 0x1F, 0x1A, 0x1F, 0x1A, 0x1F, 0x1A, 0x1A };
+    static const int vga_connected[7]       = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    static const int frank_disconnected[7]  = { 0x1F, 0x1A, 0x1F, 0x1A, 0x1F, 0x1A, 0x1A };
 
-    bool sdcardLinks = false;
-#if MURM20
-    for(uint32_t pin = SDCARD_PIN_SPI0_MISO; pin < SDCARD_PIN_SPI0_MISO + 3; ++pin) {
-#else
-    for(uint32_t pin = SDCARD_PIN_SPI0_SCK; pin < SDCARD_PIN_SPI0_SCK + 3; ++pin) {
-#endif
-        links[pin] = testPinPlus1(pin, "SDCARD inserted?");
+    static const int frank_hdmi_vga[7]      = { 0x1E, 0x1E, 0x1E, 0x1E, 0x1E, 0x1E, 0x1E };
+    static const int hdmi_connected[7]      = { 0x1E, 0x1E, 0x1E, 0x1E, 0x1E, 0x18, 0x06? };
+    static const int frank_hdmi_connected[] = { 0x21, 0x00, 0x21, 0x00, 0x21, 0x00, 0x21 };
+*/
+    for(uint32_t pin = 0; pin < 27; ++pin) {
+#if DEBUG
         if (links[pin]) {
-            sdcardLinks = true;
-            goutf(y++, false, "GPIO %d connected to %d (SDCARD inserted?)", pin, pin + 1);
+            bool cs      = !!(links[pin] & 0b100000);
+            bool pin0vPD = !!(links[pin] & 0b010000);
+            bool pin0vPU = !!(links[pin] & 0b001000);
+            bool pin1vPD = !!(links[pin] & 0b000100);
+            bool pin1vPU = !!(links[pin] & 0b000010);
+            bool connect = !!(links[pin] & 0b000001);
+            if (connect)
+                goutf(y++, true, "GPIO %02d connected to %02d %d[%d%d->%d%d]", pin, pin + 1, cs, pin0vPD, pin0vPU, pin1vPD, pin1vPU);
+            else
+                goutf(y++, false, "GPIO %02d not connected to %02d %d[%d%d->%d%d]", pin, pin + 1, cs, pin0vPD, pin0vPU, pin1vPD, pin1vPU);
         }
-    }
-    if ( sdcardLinks ) {
-        FATFS fs;
-        if (f_mount(&fs, "SD", 1) == FR_OK) {
-            goutf(y++, false, "SDCARD %d FATs; %d free clusters (%d KB each)", fs.n_fats, f_getfree32(&fs), fs.csize >> 1);
-        } else {
-            draw_text("SDCARD port looks NOK", 0, y++, 12, 0);
+#else
+        if (links[pin] & 1) {
+            goutf(y++, critical[pin], "GPIO %02d connected to %02d (%d) %s", pin, pin + 1, !!(links[pin] & 0b100000), desc[pin]);
         }
-    } else {
-        draw_text("SDCARD port looks ok (no card installed)", 0, y++, 7, 0);
+#endif
     }
 
-#if !MURM20
-    links[0] = testPinPulledUpPlus1(0, "keyboard");
-    if (links[0]) {
-        goutf(y++, false, "GPIO %d connected to %d (keyboard?)", 0, 1);
+    FATFS fs;
+    if (f_mount(&fs, "SD", 1) == FR_OK) {
+        goutf(y++, false, "SDCARD %d FATs; %d free clusters (%d KB each)", fs.n_fats, f_getfree32(&fs), fs.csize >> 1);
+    } else {
+        draw_text("SDCARD not connected", 0, y++, 12, 0);
     }
-#else
-    links[0] = testPinPulledUpPlus1(0, "mouse");
-    if (links[0]) {
-        goutf(y++, false, "GPIO %d connected to %d (mouse?)", 0, 1);
-    }
-    links[2] = testPinPulledUpPlus1(2, "keyboard");
-    if (links[2]) {
-        goutf(y++, false, "GPIO %d connected to %d (keyboard?)", 2, 3);
-    }
-#endif
+
     keyboard_init();
 
 #if PICO_RP2350
@@ -604,26 +795,8 @@ int main() {
     }
     #endif
 #endif
-
-    if (no_butterbod)
-    for(uint32_t pin = NES_GPIO_CLK; pin < 21; ++pin) { /// TODO:
-        links[pin] = testPinPlus1(pin, "NES PAD attached?");
-        if (links[pin]) {
-            goutf(y++, false, "GPIO %d connected to %d (NES PAD attached?)", pin, pin + 1);
-        }
-    }
-    for(uint32_t pin = 26; pin < 28; ++pin) {
-#if !MURM20
-        char* cause = "TDA?";
-#else
-        char* cause = "NES PAD?";
-#endif
-        links[pin] = testPinPlus1(pin, cause);
-        if (links[pin]) {
-            goutf(y++, false, "GPIO %d connected to %d (%s)", pin, pin + 1, cause);
-        }
-    }
     nespad_begin(clock_get_hz(clk_sys) / 1000, NES_GPIO_CLK, NES_GPIO_DATA, NES_GPIO_LAT);
+
     if (!isInterrupted()) {
         uint8_t rx[4];
         get_cpu_flash_jedec_id(rx);
@@ -725,7 +898,7 @@ int main() {
 #endif
     goutf(y++, false, "DONE");
 skip_it:
-    draw_text("S(A) - try speaker, L(SELECT) - left PWM, R(START) - right PWM", 0, y++, 7, 0);
+    draw_text("S(A) - try PWM, L(SELECT) - left, R(START) - right", 0, y++, 7, 0);
     draw_text("I(B) - try i2s sound (+L/R)", 0, y, 7, 0);
 
     for (int i = 0; i < 8; i++) {
@@ -793,6 +966,5 @@ skip_it:
             goutf(TEXTMODE_ROWS - 2, false, "NES PAD: %04Xh %04Xh ", nespad_state, nespad_state2);
     }
     draw_text("Volage - PageUp/PageDown; Freq. - NumPad +/-; Ins/Del", 0, TEXTMODE_ROWS - 3, 7, 0);
-
     __unreachable();
 }

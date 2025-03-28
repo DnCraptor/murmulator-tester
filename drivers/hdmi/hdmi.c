@@ -34,8 +34,7 @@ static int graphics_buffer_shift_x = 0;
 static int graphics_buffer_shift_y = 0;
 
 //текстовый буфер
-uint8_t* text_buffer = NULL;
-
+extern uint8_t* text_buffer;
 
 //DMA каналы
 //каналы работы с первичным графическим буфером
@@ -539,12 +538,12 @@ static inline bool hdmi_init() {
     return true;
 };
 //выбор видеорежима
-inline void graphics_set_mode(enum graphics_mode_t mode) {
+inline void graphics_set_mode_hdmi(enum graphics_mode_t mode) {
     graphics_mode = mode;
     clrScr(0);
 };
 
-void graphics_set_palette(uint8_t i, uint32_t color888) {
+void graphics_set_palette_hdmi(uint8_t i, uint32_t color888) {
     palette[i] = color888 & 0x00ffffff;
 
 
@@ -558,7 +557,7 @@ void graphics_set_palette(uint8_t i, uint32_t color888) {
     conv_color64[i * 2 + 1] = conv_color64[i * 2] ^ 0x0003ffffffffffffl;
 };
 
-void graphics_set_buffer(uint8_t* buffer, uint16_t width, uint16_t height) {
+void graphics_set_buffer_hdmi(uint8_t* buffer, uint16_t width, uint16_t height) {
     graphics_buffer = buffer;
     graphics_buffer_width = width;
     graphics_buffer_height = height;
@@ -566,7 +565,7 @@ void graphics_set_buffer(uint8_t* buffer, uint16_t width, uint16_t height) {
 
 
 //выделение и настройка общих ресурсов - 4 DMA канала, PIO программ и 2 SM
-void graphics_init() {
+void graphics_init_hdmi() {
     //настройка PIO
     SM_video = pio_claim_unused_sm(PIO_VIDEO, true);
     SM_conv = pio_claim_unused_sm(PIO_VIDEO_ADDR, true);
@@ -598,22 +597,17 @@ void graphics_init() {
     hdmi_init();
 }
 
-void graphics_set_bgcolor(uint32_t color888) //определяем зарезервированный цвет в палитре
+void graphics_set_bgcolor_hdmi(uint32_t color888) //определяем зарезервированный цвет в палитре
 {
     graphics_set_palette(255, color888);
 };
 
-void graphics_set_offset(int x, int y) {
+void graphics_set_offset_hdmi(int x, int y) {
     graphics_buffer_shift_x = x;
     graphics_buffer_shift_y = y;
 };
 
-void graphics_set_textbuffer(uint8_t* buffer) {
-    text_buffer = buffer;
-};
-
-
-void clrScr(const uint8_t color) {
+void clrScr_hdmi(const uint8_t color) {
     if (text_buffer)
         memset(text_buffer, color, TEXTMODE_COLS * TEXTMODE_ROWS * 2);
 }
