@@ -19,13 +19,15 @@ extern "C" volatile bool SELECT_VGA = true;
 #include "nespad.h"
 #include "ff.h"
 
+static volatile int y = 0;
+static void get_flash_info();
+
 static void goutf(int outline, bool err, const char *__restrict str, ...) {
     va_list ap;
     char buf[80];
     va_start(ap, str);
     vsnprintf(buf, 80, str, ap);
     va_end(ap);
-    printf("%s\n", buf);
     draw_text(buf, 0, outline, err ? 12 : 7, 0);
 }
 
@@ -181,6 +183,11 @@ extern "C" {
         }
         else if (ps2scancode == 0xB8) {
             altPressed = false;
+        }
+        else if (ps2scancode == 0x21) { // F is down (Flash info)
+            clrScr(0);
+            y = 0;
+            get_flash_info();
         }
         else if (ps2scancode == 0x53 && altPressed && ctrlPressed) {
             watchdog_hw->scratch[0] = cpu | (vol << 22);
@@ -356,13 +363,11 @@ static int test_1111_case(uint32_t pin0, uint32_t pin1, int res) {
 
 static int testPins(uint32_t pin0, uint32_t pin1) {
     int res = 0b000000;
-#if PICO_RP2350
     /// do not try to test butter psram this way
     if (pin0 == BUTTER_PSRAM_GPIO || pin1 == BUTTER_PSRAM_GPIO) return res;
+    if (pin0 == PICO_DEFAULT_LED_PIN || pin1 == PICO_DEFAULT_LED_PIN) return res; // LED
     if (pin0 == 23 || pin1 == 23) return res; // SMPS Power
     if (pin0 == 24 || pin1 == 24) return res; // VBus sense
-    if (pin0 == 25 || pin1 == 25) return res; // LED
-#endif
     // try pull down case (passive)
     gpio_init(pin0);
     gpio_set_dir(pin0, GPIO_IN);
@@ -470,15 +475,19 @@ static int testPins(uint32_t pin0, uint32_t pin1) {
     return res;
 }
 
+inline static void _flash_do_cmd(const uint8_t *tx, uint8_t *rx, size_t count) {
+    multicore_lockout_start_blocking();
+    const uint32_t ints = save_and_disable_interrupts();
+    flash_do_cmd(tx, rx, count);
+    restore_interrupts(ints);
+    multicore_lockout_end_blocking();
+}
+
 static void get_cpu_flash_jedec_id(uint8_t _rx[4]) {
     static uint8_t rx[4] = {0};
     if (rx[0] == 0) {
         uint8_t tx[4] = {0x9f};
-        multicore_lockout_start_blocking();
-        const uint32_t ints = save_and_disable_interrupts();
-        flash_do_cmd(tx, rx, 4);
-        restore_interrupts(ints);
-        multicore_lockout_end_blocking();
+        _flash_do_cmd(tx, rx, 4);
     }
     *(unsigned*)_rx = *(unsigned*)rx;
 }
@@ -539,13 +548,13 @@ static const char* get_volt() {
 #include <hardware/exception.h>
 
 void sigbus(void) {
-    printf("SIGBUS exception caught...\n");
+    goutf(y++, true, "SIGBUS exception caught...");
     // reset_usb_boot(0, 0);
 }
 void __attribute__((naked, noreturn)) __printflike(1, 0) dummy_panic(__unused const char *fmt, ...) {
-    printf("*** PANIC ***");
+    goutf(y++, true, "*** PANIC ***");
     if (fmt)
-        printf(fmt);
+        goutf(y++, true, fmt);
 }
 
 #ifdef MURM20
@@ -689,7 +698,6 @@ int main() {
 
     stdio_init_all();
 
-    printf("%d MHz %s\n", cpu, get_volt());
     if (vol > VREG_VOLTAGE_1_30)
 #if PICO_RP2040
         vol = VREG_VOLTAGE_1_30;
@@ -705,7 +713,6 @@ int main() {
     } else {
         cpu = clock_get_hz(clk_sys) / (KHZ * KHZ);
     }
-    printf("%d (%d:%d:%d) MHz %s\n", cpu, vco, postdiv1, postdiv2, get_volt());
 
 #if PICO_RP2350
 #ifdef BUTTER_PSRAM_GPIO
@@ -748,7 +755,6 @@ int main() {
 
     sleep_ms(250);
 
-    int y = 0;
     goutf(y++, false, PROJECT_VERSION " started on " PLAT " with %d MHz (%d:%d:%d) %s", cpu, vco / (KHZ * KHZ), postdiv1, postdiv2, get_volt());
 /*
     static const int vga_disconnected[7]    = { 0x1F, 0x1A, 0x1F, 0x1A, 0x1F, 0x1A, 0x1A };
@@ -838,13 +844,11 @@ int main() {
         if (!isInterrupted()) {
             printf("Test flash write ... ");
             if (write_flash()) {
-                printf(" Test write to FLASH - passed\n");
                 draw_text(" Test write to FLASH - passed", 0, y++, 7, 0);
             } else {
-                printf(" Test write to FLASH - failed\n");
                 draw_text(" Test write to FLASH - failed", 0, y++, 12, 0);
             }
-            }
+        }
     }
     if (!isInterrupted() && no_butterbod) {
         init_psram();
@@ -852,7 +856,7 @@ int main() {
         uint8_t rx8[8];
         psram_id(rx8);
         if (psram32) {
-            goutf(y++, false, "PSRAM %d MB; MF ID: %02x; KGD: %02x; EID: %02X%02X-%02X%02X-%02X%02X",
+            goutf(y++, false, "PSRAM %d MB; MFID: %02X KGD: %02X EID: %02X%02X-%02X%02X-%02X%02X",
                               psram32 >> 20, rx8[0], rx8[1], rx8[2], rx8[3], rx8[4], rx8[5], rx8[6], rx8[7]);
     
             uint32_t a = 0;
@@ -939,6 +943,7 @@ skip_it:
     draw_text(" LightYellow on Black ", 0, y++, 14, 0);
 
     draw_text("Freq. - NumPad +/- 4MHz; Ins/Del - 40MHz", 0, TEXTMODE_ROWS - 3, 7, 0);
+    draw_text("F - Flash info", 0, TEXTMODE_ROWS - 2, 7, 0);
 
     for (int i = 0; i < 8; i++) {
         sleep_ms(short_light);
@@ -960,7 +965,7 @@ skip_it:
                 PWM_init_pin(BEEPER_PIN, (1 << 12) - 1);
                 PWM_init_pin(PWM_PIN0  , (1 << 12) - 1);
                 PWM_init_pin(PWM_PIN1  , (1 << 12) - 1);
-                draw_text(" (Ctrl+Alt+Del - restart to test i2s) ", 0, y, 7, 0);
+                draw_text(" (Ctrl+Alt+Del - restart to test i2s)               ", 0, y, 7, 0);
                 pwm_init = true;
             }
             if (S) pwm_set_gpio_level(BEEPER_PIN, (1 << 12) - 1);
@@ -974,7 +979,7 @@ skip_it:
         }
         else if (!pwm_init && I) {
             if (!i2s_1nit) {
-                draw_text(" (Ctrl+Alt+Del - restart to test PWM)                         ", 0, y - 1, 7, 0);
+                draw_text(" (Ctrl+Alt+Del - restart to test PWM)               ", 0, y - 1, 7, 0);
                 i2s_config.dma_trans_count = samples >> 1;
                 i2s_init(&i2s_config);
                 for (int i = 0; i < samples; ++i) {
@@ -1002,7 +1007,100 @@ skip_it:
             sleep_ms(100);
         }
         if (nstate != nespad_state || nstate2 != nespad_state2)
-            goutf(TEXTMODE_ROWS - 2, false, "NES PAD: %04Xh %04Xh ", nespad_state, nespad_state2);
+            goutf(TEXTMODE_ROWS - 2, false, "NES PAD: %04Xh %04Xh                                ", nespad_state, nespad_state2);
     }
     __unreachable();
+}
+
+#define printf(...) goutf(y++, false, __VA_ARGS__)
+// --- Список производителей по JEDEC ID ---
+typedef struct {
+    uint8_t id;
+    const char *name;
+} jedec_vendor_t;
+
+jedec_vendor_t vendors[] = {
+    {0xEF, "Winbond"},
+    {0xC2, "Macronix"},
+    {0x20, "Micron"},
+    {0x1F, "Atmel"},
+    {0x9D, "ISSI"},
+    {0x01, "Spansion"},
+    {0x00, "Unknown"}
+};
+
+// --- Функция для поиска имени производителя ---
+const char* get_vendor_name(uint8_t id) {
+    for (size_t i = 0; i < sizeof(vendors) / sizeof(vendors[0]); i++) {
+        if (vendors[i].id == id) return vendors[i].name;
+    }
+    return "Unknown";
+}
+
+// --- Функция расшифровки битов статусного регистра ---
+inline static void print_status_bits(uint8_t status) {
+    printf("  - Write Protect (WP): %s", (status & 0x80) ? "Enabled" : "Disabled");
+    printf("  - Block Protect (BP): %s", (status & 0x0C) ? "Enabled" : "Disabled");
+    printf("  - Write In Progress (WIP): %s", (status & 0x01) ? "Yes" : "No");
+}
+
+// --- Расшифровка Memory Type ---
+const char* get_memory_type(uint8_t type) {
+    switch (type) {
+        case 0x20: return "NOR Flash (Micron, Spansion, ISSI)";
+        case 0x40: return "Serial NOR Flash (Winbond, Macronix, GigaDevice)";
+        case 0x60: return "Parallel NOR Flash";
+        case 0x70: return "NAND Flash (Micron, Samsung)";
+        case 0x80: return "EEPROM / OTP Memory";
+        case 0x90: return "Multi-Level Cell (MLC) NAND Flash";
+        case 0xD0: return "Quad-SPI NOR Flash";
+        default:   return "Unknown type of memory";
+    }
+}
+
+// --- Универсальная функция для чтения информации о SPI Flash ---
+static void get_flash_info() {
+    uint8_t rx[16] = {0};
+
+    // --- Читаем JEDEC ID (0x9F) ---
+    uint8_t cmd_jedec[4] = {0x9F, 0, 0, 0}; 
+    _flash_do_cmd(cmd_jedec, rx, 4);
+    printf("=== JEDEC ID (9Fh) ===");
+    printf("Manufacturer: %02X-%02X %s", rx[0], rx[1], get_vendor_name(rx[1]));
+    printf("Memory Type:  0x%02X %s", rx[2], get_memory_type(rx[2]));
+    printf("Capacity:     0x%02X %d B", rx[3], 1 << rx[3]);
+
+    // --- Читаем Manufacturer ID (0x90) ---
+    uint8_t cmd_mfid[5] = {0x90, 0x00, 0x00, 0x00, 0x00}; 
+    _flash_do_cmd(cmd_mfid, rx, 2);
+    printf("=== Manufacturer ID (90h) ===");
+    printf("Manufacturer: 0x%02X", rx[0]);
+    printf("Device ID:    0x%02X", rx[1]);
+
+    // --- Читаем SFDP (0x5A) ---
+    uint8_t cmd_sfdp[5] = {0x5A, 0x00, 0x00, 0x00, 0x00}; 
+    _flash_do_cmd(cmd_sfdp, rx, 8);
+    printf("=== SFDP Header (5Ah) ===");
+    printf("Signature:    %c%c%c%c", rx[0], rx[1], rx[2], rx[3]);
+    printf("SFDP Version: 0x%02X%02X", rx[4], rx[5]);
+
+    // --- Читаем Unique ID (0x4B) ---
+    uint8_t cmd_uid[5] = {0x4B, 0, 0, 0, 0};  
+    _flash_do_cmd(cmd_uid, rx, 8);
+    printf("=== Unique ID (4Bh) ===");
+    printf("ID: %02X %02X %02X %02X %02X %02X %02X %02X",
+           rx[0], rx[1], rx[2], rx[3], rx[4], rx[5], rx[6], rx[7]);
+
+    // --- Читаем регистры статуса (0x05 и 0x35) ---
+    uint8_t cmd_status1[2] = {0x05, 0};  
+    _flash_do_cmd(cmd_status1, rx, 2);
+    printf("=== Status Register 1 (05h) ===");
+    printf("Raw Value: 0x%02X", rx[0]);
+    print_status_bits(rx[0]);
+
+    uint8_t cmd_status2[2] = {0x35, 0};  
+    _flash_do_cmd(cmd_status2, rx, 2);
+    printf("=== Status Register 2 (35h) ===");
+    printf("Raw Value: 0x%02X", rx[0]);
+    printf("  - Quad Enable (QE): %s", (rx[0] & 0x02) ? "Enabled" : "Disabled");
 }
