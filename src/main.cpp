@@ -928,15 +928,15 @@ int main() {
 skip_it:
     draw_text("S(A) - try PWM, L(SELECT) - left, R(START) - right", 0, y++, 7, 0);
     draw_text("I(B) - try i2s sound (+L/R)", 0, y++, 7, 0);
-    draw_text("Red on Gray          ", 0, y++, 12, 7);
-    draw_text("Blue on Green        ", 0, y++, 1, 2);
-    draw_text("Marin on Red         ", 0, y++, 3, 4);
-    draw_text("Magenta on Yellow    ", 0, y++, 5, 6);
-    draw_text("Gray on Black        ", 0, y++, 7, 8);
-    draw_text("Blue on LightGreen   ", 0, y++, 9, 10);
-    draw_text("Yellow on LightBlue  ", 0, y++, 6, 11);
-    draw_text("White on LightMagenta", 0, y++, 15, 13);
-    draw_text("LightYellow on Black ", 0, y++, 14, 0);
+    draw_text("         Red on Gray         ", 0, y++, 12, 7);
+    draw_text("        Blue on Green        ", 0, y++, 1, 2);
+    draw_text("       Marin on Red          ", 0, y++, 3, 4);
+    draw_text("     Magenta on Yellow       ", 0, y++, 5, 6);
+    draw_text("        Gray on Black        ", 0, y++, 7, 8);
+    draw_text("        Blue on LightGreen   ", 0, y++, 9, 10);
+    draw_text("      Yellow on LightBlue    ", 0, y++, 6, 11);
+    draw_text("       White on LightMagenta ", 0, y++, 15, 13);
+    draw_text(" LightYellow on Black ", 0, y++, 14, 0);
 
     draw_text("Freq. - NumPad +/- 4MHz; Ins/Del - 40MHz", 0, TEXTMODE_ROWS - 3, 7, 0);
 
