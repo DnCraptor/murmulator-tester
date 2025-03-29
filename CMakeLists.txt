@@ -34,7 +34,7 @@ option(MURM20 "Murmulator 2.0" OFF)
 #set(TV ON)
 #set(SOFTTV ON)
 
-set(VERSION "1.1.1")
+set(VERSION "1.1.3")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -129,6 +129,7 @@ endif ()
 
 if (MURM20)
     target_compile_definitions(${PROJECT_NAME} PRIVATE
+        PROJECT_VERSION="${VERSION}"
         MURM20=1
         # VGA 8 pins starts from pin:
         VGA_BASE_PIN=12
@@ -159,15 +160,15 @@ if (MURM20)
         NES_GPIO_LAT=21
         NES_GPIO_DATA=26
 
-        # PSRAM
+        PSRAM
         # PSRAM_MUTEX=1
         PSRAM_SPINLOCK=1
         PSRAM_ASYNC=1
 
-        PSRAM_PIN_CS=18
-        PSRAM_PIN_SCK=19
-        PSRAM_PIN_MOSI=20
-        PSRAM_PIN_MISO=21
+        PSRAM_PIN_CS=8
+        PSRAM_PIN_SCK=6
+        PSRAM_PIN_MOSI=7
+        PSRAM_PIN_MISO=4
 
         BUTTER_PSRAM_GPIO=8
 
@@ -180,6 +181,7 @@ if (MURM20)
     )
 else ()
     target_compile_definitions(${PROJECT_NAME} PRIVATE
+        PROJECT_VERSION="${VERSION}"
         # VGA 8 pins starts from pin:
         VGA_BASE_PIN=6
 

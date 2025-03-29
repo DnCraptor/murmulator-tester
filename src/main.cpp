@@ -15,9 +15,7 @@
 
 extern "C" volatile bool SELECT_VGA = true;
 
-#ifndef MURM20
 #include "psram_spi.h"
-#endif
 #include "nespad.h"
 #include "ff.h"
 
@@ -725,7 +723,7 @@ int main() {
     sleep_ms(1000);
 
     int links[27] = { false };
-    for(uint32_t pin = 0; pin < 27; ++pin) {
+    for(uint32_t pin = 0; pin < 28; ++pin) {
         links[pin] = testPins(pin, pin + 1);
     }
     SELECT_VGA = (links[VGA_BASE_PIN] == 0) || (links[VGA_BASE_PIN] == 0x1F);
@@ -751,7 +749,7 @@ int main() {
     sleep_ms(250);
 
     int y = 0;
-    goutf(y++, false, "Started with %d MHz (%d:%d:%d) %s", cpu, vco / (KHZ * KHZ), postdiv1, postdiv2, get_volt());
+    goutf(y++, false, PROJECT_VERSION " started with %d MHz (%d:%d:%d) %s", cpu, vco / (KHZ * KHZ), postdiv1, postdiv2, get_volt());
 /*
     static const int vga_disconnected[7]    = { 0x1F, 0x1A, 0x1F, 0x1A, 0x1F, 0x1A, 0x1A };
     static const int vga_connected[7]       = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
@@ -761,7 +759,7 @@ int main() {
     static const int hdmi_connected[7]      = { 0x1E, 0x1E, 0x1E, 0x1E, 0x1E, 0x18, 0x06? };
     static const int frank_hdmi_connected[] = { 0x21, 0x00, 0x21, 0x00, 0x21, 0x00, 0x21 };
 */
-    for(uint32_t pin = 0; pin < 27; ++pin) {
+    for(uint32_t pin = 0; pin < 28; ++pin) {
 #if DEBUG
         if (links[pin]) {
             bool cs      = !!(links[pin] & 0b100000);
@@ -810,7 +808,7 @@ int main() {
         begin = time_us_32();
         for (a = 0; a < psram32; ++a) {
             if ((a & 0xFF) != PSRAM_DATA[a]) {
-                goutf(y++, false, "Butter-PSRAM read failed at %ph", PSRAM_DATA+a);
+                goutf(y++, false, " Butter-PSRAM read failed at %ph", PSRAM_DATA+a);
                 no_butterbod = true;
                 break;
             }
@@ -818,11 +816,11 @@ int main() {
         elapsed = time_us_32() - begin;
         speedr = d * a / elapsed;
         if (!no_butterbod) {
-            goutf(y++, false, "8-bit line write speed: %f MBps", speedw);
-            goutf(y++, false, "8-bit line read speed: %f MBps", speedr);
+            goutf(y++, false, " 8-bit line write speed: %f MBps", speedw);
+            goutf(y++, false, " 8-bit line read speed: %f MBps", speedr);
         }
         if (no_butterbod) {
-            goutf(y++, false, "Butter-PSRAM on GPIO-%d not found", BUTTER_PSRAM_GPIO);
+            goutf(y++, false, " Butter-PSRAM on GPIO-%d not found", BUTTER_PSRAM_GPIO);
         }
     }
     #endif
@@ -840,15 +838,14 @@ int main() {
         if (!isInterrupted()) {
             printf("Test flash write ... ");
             if (write_flash()) {
-                printf("Test write to FLASH - passed\n");
-                draw_text("Test write to FLASH - passed", 0, y++, 7, 0);
+                printf(" Test write to FLASH - passed\n");
+                draw_text(" Test write to FLASH - passed", 0, y++, 7, 0);
             } else {
-                printf("Test write to FLASH - failed\n");
-                draw_text("Test write to FLASH - failed", 0, y++, 12, 0);
+                printf(" Test write to FLASH - failed\n");
+                draw_text(" Test write to FLASH - failed", 0, y++, 12, 0);
             }
             }
     }
-#if !MURM20
     if (!isInterrupted() && no_butterbod) {
         init_psram();
         uint32_t psram32 = psram_size();
@@ -869,18 +866,18 @@ int main() {
             }
             elapsed = time_us_32() - begin;
             speed = d * a / elapsed;
-            goutf(y++, false, "8-bit line write speed: %f MBps", speed);
+            goutf(y++, false, " 8-bit line write speed: %f MBps", speed);
             begin = time_us_32();
             for (a = 0; a < psram32; ++a) {
                 if (isInterrupted()) goto skip_it;
                 if ((a & 0xFF) != read8psram(a)) {
-                    goutf(y++, true, "8-bit read failed at %ph", a);
+                    goutf(y++, true, " 8-bit read failed at %ph", a);
                     break;
                 }
             }
             elapsed = time_us_32() - begin;
             speed = d * a / elapsed;
-            goutf(y++, false, "8-bit line read speed: %f MBps", speed);
+            goutf(y++, false, " 8-bit line read speed : %f MBps", speed);
         
             begin = time_us_32();
             for (a = 0; a < psram32; a += 2) {
@@ -901,7 +898,7 @@ int main() {
             }
             elapsed = time_us_32() - begin;
             speed = d * a / elapsed;
-            goutf(y++, false, "16-bit line read speed: %f MBps", speed);
+            goutf(y++, false, "16-bit line read speed : %f MBps", speed);
         
             begin = time_us_32();
             for (a = 0; a < psram32; a += 4) {
@@ -922,12 +919,11 @@ int main() {
             }
             elapsed = time_us_32() - begin;
             speed = d * a / elapsed;
-            goutf(y++, false, "32-bit line read speed: %f MBps", speed);
+            goutf(y++, false, "32-bit line read speed : %f MBps", speed);
         } else {
             goutf(y++, false, "No PSRAM detected");
         }
     }
-#endif
     goutf(y++, false, "DONE");
 skip_it:
     draw_text("S(A) - try PWM, L(SELECT) - left, R(START) - right", 0, y++, 7, 0);
