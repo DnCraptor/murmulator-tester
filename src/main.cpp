@@ -145,7 +145,7 @@ extern "C" {
     #include "audio.h"
     #include "ps2.h"
     bool __time_critical_func(handleScancode)(const uint32_t ps2scancode) {
-        goutf(TEXTMODE_ROWS - 3, false, "Last scancode: %04Xh  ", ps2scancode);
+        goutf(TEXTMODE_ROWS - 3, false, "Last scancode: %04Xh                           ", ps2scancode);
         if (ps2scancode == 0x1F) { // S
             Spressed = true;
         }
@@ -590,8 +590,8 @@ static const char* const desc[] = {
     "SD", // 06 -> 07
     "SD", // 07 -> 08
     "PSRAM+", // 08 -> 09
-    "I2S?", // 09 -> 10
-    "I2S?", // 10 -> 11
+    "I2S/PWM", // 09 -> 10
+    "I2S/PWM", // 10 -> 11
     "I2S VGA", // 11 -> 12
     "VGA", // 12 -> 13
     "VIDEO", // 13 -> 14
@@ -640,8 +640,8 @@ static const bool critical[] = {
     1, // 23 -> 24
     1, // 24 -> 25
     1, // 25 -> 26
-    1, // 26 -> 27
-    1, // 27 -> 28
+    0, // 26 -> 27
+    0, // 27 -> 28
     1, // 28 -> 29
 };
 static const char* const desc[] = {
@@ -671,9 +671,9 @@ static const char* const desc[] = {
     "", // 23 -> 24
     "", // 24 -> 25
     "", // 25 -> 26
-    "I2S", // 26 -> 27
-    "I2S", // 27 -> 28
-    "I2S", // 28 -> 29
+    "I2S/PWM", // 26 -> 27
+    "I2S/PWM", // 27 -> 28
+    "I2S/PWM", // 28 -> 29
 };
 #endif
 
@@ -749,7 +749,7 @@ int main() {
     sleep_ms(250);
 
     int y = 0;
-    goutf(y++, false, PROJECT_VERSION " started with %d MHz (%d:%d:%d) %s", cpu, vco / (KHZ * KHZ), postdiv1, postdiv2, get_volt());
+    goutf(y++, false, PROJECT_VERSION " started on " PLAT " with %d MHz (%d:%d:%d) %s", cpu, vco / (KHZ * KHZ), postdiv1, postdiv2, get_volt());
 /*
     static const int vga_disconnected[7]    = { 0x1F, 0x1A, 0x1F, 0x1A, 0x1F, 0x1A, 0x1A };
     static const int vga_connected[7]       = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
@@ -927,7 +927,18 @@ int main() {
     goutf(y++, false, "DONE");
 skip_it:
     draw_text("S(A) - try PWM, L(SELECT) - left, R(START) - right", 0, y++, 7, 0);
-    draw_text("I(B) - try i2s sound (+L/R)", 0, y, 7, 0);
+    draw_text("I(B) - try i2s sound (+L/R)", 0, y++, 7, 0);
+    draw_text("Red on Gray          ", 0, y++, 12, 7);
+    draw_text("Blue on Green        ", 0, y++, 1, 2);
+    draw_text("Marin on Red         ", 0, y++, 3, 4);
+    draw_text("Magenta on Yellow    ", 0, y++, 5, 6);
+    draw_text("Gray on Black        ", 0, y++, 7, 8);
+    draw_text("Blue on LightGreen   ", 0, y++, 9, 10);
+    draw_text("Yellow on LightBlue  ", 0, y++, 6, 11);
+    draw_text("White on LightMagenta", 0, y++, 15, 13);
+    draw_text("LightYellow on Black ", 0, y++, 14, 0);
+
+    draw_text("Freq. - NumPad +/- 4MHz; Ins/Del - 40MHz", 0, TEXTMODE_ROWS - 3, 7, 0);
 
     for (int i = 0; i < 8; i++) {
         sleep_ms(short_light);
@@ -993,6 +1004,5 @@ skip_it:
         if (nstate != nespad_state || nstate2 != nespad_state2)
             goutf(TEXTMODE_ROWS - 2, false, "NES PAD: %04Xh %04Xh ", nespad_state, nespad_state2);
     }
-    draw_text("Volage - PageUp/PageDown; Freq. - NumPad +/-; Ins/Del", 0, TEXTMODE_ROWS - 3, 7, 0);
     __unreachable();
 }
