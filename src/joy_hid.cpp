@@ -15,9 +15,6 @@ struct input_bits_t {
 };
 
 extern input_bits_t gamepad1_bits;
-extern int cursor_x;
-extern int cursor_y;
-extern int cursor_button;
 
 //Since https://github.com/hathach/tinyusb/pull/2222, we can add in custom vendor drivers easily
 usbh_class_driver_t const* usbh_app_driver_get_cb(uint8_t* driver_count) {
@@ -30,13 +27,7 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     auto xid_itf = (xinputh_interface_t *)report;
     const xinput_gamepad_t* p = &xid_itf->pad;
 
-    bool a = p->wButtons & XINPUT_GAMEPAD_A;
-    if (!gamepad1_bits.a && a) {
-        cursor_button = true;
-    } else if (gamepad1_bits.a && !a) {
-        cursor_button = false;
-    }
-    gamepad1_bits.a = a;
+    gamepad1_bits.a = p->wButtons & XINPUT_GAMEPAD_A;
     gamepad1_bits.b = p->wButtons & XINPUT_GAMEPAD_B;
 
     gamepad1_bits.select = p->wButtons & XINPUT_GAMEPAD_BACK;
@@ -72,19 +63,6 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
     gamepad1_bits.up = up;
     gamepad1_bits.left = left;
     gamepad1_bits.right = right;
-
-    if (gamepad1_bits.up) {
-        cursor_y -= cursor_joy_inc_dec;
-    }
-    if (gamepad1_bits.down) {
-        cursor_y += cursor_joy_inc_dec;
-    }
-    if (gamepad1_bits.left) {
-        cursor_x -= cursor_joy_inc_dec;
-    }
-    if (gamepad1_bits.right) {
-        cursor_x += cursor_joy_inc_dec;
-    }
 
     /*char tmp[128];
     sprintf(tmp, "[%02x, %02x], Type: %s, Buttons %04x, LT: %02x RT: %02x, LX: %d, LY: %d, RX: %d, RY: %d\n",

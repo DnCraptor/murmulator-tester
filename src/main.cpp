@@ -55,6 +55,7 @@ volatile static bool no_butterbod = true;
 volatile static bool no_butterbod = false;
 #endif
 volatile static uint8_t pressed_key[256] = { 0 };
+volatile static uint8_t mouse_buttons = 0;
 volatile static bool i2s_1nit = false;
 volatile static bool pwm_1nit = false;
 volatile static uint32_t cpu = 0;
@@ -68,7 +69,7 @@ inline bool isSpeaker() {
     nespad_read();
     uint32_t nstate = nespad_state;
     uint32_t nstate2 = nespad_state2;
-    return pressed_key[HID_KEY_S] || (nstate & DPAD_A) || (nstate2 & DPAD_A);
+    return pressed_key[HID_KEY_S] || (nstate & DPAD_A) || (nstate2 & DPAD_A) || (mouse_buttons & MOUSE_BUTTON_MIDDLE);
 }
 
 inline bool isI2S() {
@@ -273,6 +274,25 @@ extern "C" {
 #endif
 }
 
+void process_mouse_report(hid_mouse_report_t const * report)
+{
+    mouse_buttons = report->buttons;
+    goutf(TEXTMODE_ROWS - 2, false, "Mouse X: %d Y: %d Wheel: %02Xh Buttons: %02Xh         ", report->x, report->y, report->wheel, report->buttons);
+  /*
+  //------------- button state  -------------//
+  uint8_t button_changed_mask = report->buttons ^ prev_report.buttons;
+  if ( button_changed_mask & report->buttons)
+  {
+    printf(" %c%c%c ",
+       report->buttons & MOUSE_BUTTON_LEFT   ? 'L' : '-',
+       report->buttons & MOUSE_BUTTON_MIDDLE ? 'M' : '-',
+       report->buttons & MOUSE_BUTTON_RIGHT  ? 'R' : '-');
+  }
+
+  //------------- cursor movement -------------//
+  cursor_movement(report->x, report->y, report->wheel);
+  */
+}
 
 inline static bool isInReport(hid_keyboard_report_t const *report, const unsigned char keycode) {
     for (unsigned char i: report->keycode) {
@@ -1108,8 +1128,8 @@ skip_it:
         uint32_t nstate2 = nespad_state2;
         bool S = isSpeaker();
         bool I = isI2S();
-        bool L = pressed_key[HID_KEY_L] || (nstate & DPAD_SELECT) || (nstate2 & DPAD_SELECT);
-        bool R = pressed_key[HID_KEY_R] || (nstate &  DPAD_START) || (nstate2 &  DPAD_START);
+        bool L = pressed_key[HID_KEY_L] || (nstate & DPAD_SELECT) || (nstate2 & DPAD_SELECT) || (mouse_buttons & MOUSE_BUTTON_LEFT);
+        bool R = pressed_key[HID_KEY_R] || (nstate &  DPAD_START) || (nstate2 &  DPAD_START) || (mouse_buttons & MOUSE_BUTTON_RIGHT);
         if (!i2s_1nit && (S || R || L)) {
             if (!pwm_1nit) {
                 PWM_init_pin(BEEPER_PIN, (1 << 12) - 1);

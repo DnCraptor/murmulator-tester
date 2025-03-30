@@ -63,7 +63,7 @@ void process_kbd_report(
   hid_keyboard_report_t const *prev_report
 );
 
-static void process_mouse_report(hid_mouse_report_t const * report);
+void process_mouse_report(hid_mouse_report_t const * report);
 static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len);
 
 //--------------------------------------------------------------------+
@@ -193,32 +193,6 @@ void cursor_movement(int8_t x, int8_t y, int8_t wheel)
 #else
   printf("(%d %d %d)\r\n", x, y, wheel);
 #endif
-}
-
-int cursor_x = 0;
-int cursor_y = 0;
-int cursor_button = 0;
-
-static void process_mouse_report(hid_mouse_report_t const * report)
-{
-    cursor_button = report->buttons & MOUSE_BUTTON_LEFT;
-    cursor_x += report->x;
-    cursor_y += report->y; // TODO: DPI
-  /**
-
-  //------------- button state  -------------//
-  uint8_t button_changed_mask = report->buttons ^ prev_report.buttons;
-  if ( button_changed_mask & report->buttons)
-  {
-    printf(" %c%c%c ",
-       report->buttons & MOUSE_BUTTON_LEFT   ? 'L' : '-',
-       report->buttons & MOUSE_BUTTON_MIDDLE ? 'M' : '-',
-       report->buttons & MOUSE_BUTTON_RIGHT  ? 'R' : '-');
-  }
-
-  //------------- cursor movement -------------//
-  cursor_movement(report->x, report->y, report->wheel);
-  */
 }
 
 //--------------------------------------------------------------------+
