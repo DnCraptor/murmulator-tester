@@ -776,7 +776,7 @@ int main() {
     multicore_launch_core1(render_core);
     sem_release(&vga_start_semaphore);
 
-    sleep_ms(250);
+    sleep_ms(550);
 
     goutf(y++, false, PROJECT_VERSION " started on " PLAT " with %d MHz (%d:%d:%d) %s", cpu, vco / (KHZ * KHZ), postdiv1, postdiv2, get_volt());
 /*
