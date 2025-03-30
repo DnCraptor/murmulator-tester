@@ -955,8 +955,10 @@ int main() {
             elapsed = time_us_32() - begin;
             speed = d * a / elapsed;
             goutf(y++, false, "32-bit line read speed : %f MBps", speed);
+            draw_text("             ", 0, TEXTMODE_ROWS - 1, 7, 0);
         } else {
             goutf(y++, false, "No PSRAM detected");
+            draw_text("No   PSRAM   ", 0, TEXTMODE_ROWS - 1, 7, 0);
         }
     }
     goutf(y++, false, "DONE");

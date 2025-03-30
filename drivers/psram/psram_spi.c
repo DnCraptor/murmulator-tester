@@ -5,12 +5,70 @@ static psram_spi_inst_t psram_spi;
 #define ITE_PSRAM (1ul << 20)
 #define MAX_PSRAM (512ul << 20)
 
+void draw_text(const char* string, uint32_t x, uint32_t y, uint8_t color, uint8_t bgcolor);
+
+inline static void _dma_channel_wait_for_finish_blocking(uint channel) {
+    int a = 0;
+    while (dma_channel_is_busy(channel) && a++ < 1000000) {
+        tight_loop_contents();
+    }
+    // stop the compiler hoisting a non-volatile buffer access above the DMA completion.
+    __compiler_memory_barrier();
+}
+
+__force_inline static void __time_critical_func(_pio_spi_write_dma_blocking)(
+        psram_spi_inst_t* spi,
+        const uint8_t* src, const size_t src_len
+) {
+    spi->spin_irq_state = spin_lock_blocking(spi->spinlock);
+    dma_channel_transfer_from_buffer_now(spi->write_dma_chan, src, src_len);
+    _dma_channel_wait_for_finish_blocking(spi->write_dma_chan);
+    spin_unlock(spi->spinlock, spi->spin_irq_state);
+}
+
+__force_inline static void _psram_write32(psram_spi_inst_t* spi, uint32_t addr, uint32_t val) {
+    // Break the address into three bytes and send read command
+    write32_command[3] = addr >> 16;
+    write32_command[4] = addr >> 8;
+    write32_command[5] = addr;
+    write32_command[6] = val;
+    write32_command[7] = val >> 8;
+    write32_command[8] = val >> 16;
+    write32_command[9] = val >> 24;
+
+    _pio_spi_write_dma_blocking(spi, write32_command, sizeof(write32_command));
+};
+
+__force_inline static void __time_critical_func(_pio_spi_write_read_dma_blocking)(
+        psram_spi_inst_t* spi,
+        const uint8_t* src, const size_t src_len,
+        uint8_t* dst, const size_t dst_len
+) {
+    spi->spin_irq_state = spin_lock_blocking(spi->spinlock);
+    dma_channel_transfer_from_buffer_now(spi->write_dma_chan, src, src_len);
+    dma_channel_transfer_to_buffer_now(spi->read_dma_chan, dst, dst_len);
+    _dma_channel_wait_for_finish_blocking(spi->write_dma_chan);
+    dma_channel_wait_for_finish_blocking(spi->read_dma_chan);
+    spin_unlock(spi->spinlock, spi->spin_irq_state);
+}
+
+__force_inline static uint32_t _psram_read32(psram_spi_inst_t* spi, uint32_t addr) {
+    read32_command[3] = addr >> 16;
+    read32_command[4] = addr >> 8;
+    read32_command[5] = addr;
+    uint32_t val;
+    _pio_spi_write_read_dma_blocking(spi, read32_command, sizeof(read32_command), (unsigned char*)&val, 4);
+    return val;
+};
+
 static uint32_t _psram_size() {
 #ifdef PSRAM    
     int32_t res = 0;
     for (res = ITE_PSRAM; res < MAX_PSRAM; res += ITE_PSRAM) {
-        psram_write32(&psram_spi, res, res);
-        if (res != psram_read32(&psram_spi, res)) {
+        draw_text("Init WRITE     ", 0, 29, 7, 0);
+        _psram_write32(&psram_spi, res, res);
+        draw_text("Init READ      ", 0, 29, 7, 0);
+        if (res != _psram_read32(&psram_spi, res)) {
             res -= ITE_PSRAM;
             return res;
         }
@@ -34,8 +92,11 @@ uint32_t psram_size() {
 
 uint32_t init_psram() {
     psram_spi = psram_spi_init_clkdiv(pio0, -1, 2.0, false);
+    draw_text("Init PSRAM 1   ", 0, 29, 7, 0);
     if ( !_psram_size() ) {
+        draw_text("Init PSRAM 2   ", 0, 29, 7, 0);
         psram_spi = psram_spi_init_clkdiv(pio0, -1, 2.0, true);
+        draw_text("Init PSRAM 3   ", 0, 29, 7, 0);
     }
     return psram_size();
 }
