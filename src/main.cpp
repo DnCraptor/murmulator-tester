@@ -19,11 +19,12 @@ extern "C" volatile bool SELECT_VGA = true;
 #include "nespad.h"
 #include "ff.h"
 
-static volatile int y = 0;
-static void print_psram_info();
-static void get_flash_info();
+volatile int y = 0;
+void print_psram_info();
+void get_flash_info();
+void get_cpu_flash_jedec_id(uint8_t _rx[4]);
 
-static void goutf(int outline, bool err, const char *__restrict str, ...) {
+void goutf(int outline, bool err, const char *__restrict str, ...) {
     va_list ap;
     char buf[80];
     va_start(ap, str);
@@ -44,6 +45,7 @@ volatile static bool Lpressed = false;
 volatile static bool Rpressed = false;
 volatile static bool Ipressed = false;
 volatile static bool i2s_1nit = false;
+volatile static bool pwm_1nit = false;
 volatile static uint32_t cpu = 0;
 volatile static uint32_t vol = 0;
 const int samples = 64;
@@ -53,11 +55,15 @@ static int16_t samplesLR[samples][2];
 
 inline bool isSpeaker() {
     nespad_read();
-    return Spressed || (nespad_state & DPAD_A) || (nespad_state2 & DPAD_A);
+    uint32_t nstate = nespad_state;
+    uint32_t nstate2 = nespad_state2;
+    return Spressed || (nstate & DPAD_A) || (nstate2 & DPAD_A);
 }
 
 inline bool isI2S() {
-    return Ipressed || (nespad_state & DPAD_B) || (nespad_state2 & DPAD_B);
+    uint32_t nstate = nespad_state;
+    uint32_t nstate2 = nespad_state2;
+    return Ipressed || (nstate & DPAD_B) || (nstate2 == DPAD_B);
 }
 
 inline bool isInterrupted() {
@@ -144,11 +150,24 @@ void __no_inline_not_in_flash_func(psram_init)(uint cs_pin) {
 }
 #endif
 
+static void footer() {
+    if (i2s_1nit)
+        draw_text(" (Ctrl+Alt+Del - restart to test PWM)               ", 0, TEXTMODE_ROWS - 5, 7, 0);
+    else
+        draw_text("S(A) - try PWM, L(SELECT) - left, R(START) - right  ", 0, TEXTMODE_ROWS - 5, 7, 0);
+    if (pwm_1nit)
+        draw_text(" (Ctrl+Alt+Del - restart to test i2s)               ", 0, TEXTMODE_ROWS - 4, 7, 0);
+    else
+        draw_text("I(B) - try i2s sound (+L/R)                         ", 0, TEXTMODE_ROWS - 4, 7, 0);
+    draw_text("Freq. - NumPad +/- 4MHz; Ins/Del - 40MHz            ", 0, TEXTMODE_ROWS - 3, 7, 0);
+    draw_text("F - Flash info; P - PSRAM                           ", 0, TEXTMODE_ROWS - 2, 7, 0);
+}
+
 extern "C" {
     #include "audio.h"
     #include "ps2.h"
     bool __time_critical_func(handleScancode)(const uint32_t ps2scancode) {
-        goutf(TEXTMODE_ROWS - 3, false, "Last scancode: %04Xh                           ", ps2scancode);
+        goutf(TEXTMODE_ROWS - 3, false, "Last scancode: %04Xh                                ", ps2scancode);
         if (ps2scancode == 0x1F) { // S
             Spressed = true;
         }
@@ -189,11 +208,13 @@ extern "C" {
             clrScr(0);
             y = 0;
             get_flash_info();
+            footer();
         }
         else if (ps2scancode == 0x19) { // P is down (PSRAM info)
             clrScr(0);
             y = 0;
             print_psram_info();
+            footer();
         }
         else if (ps2scancode == 0x53 && altPressed && ctrlPressed) {
             watchdog_hw->scratch[0] = cpu | (vol << 22);
@@ -386,7 +407,7 @@ static int testPins(uint32_t pin0, uint32_t pin1) {
     int pin1vPD = gpio_get(pin1);
     gpio_deinit(pin0);
     gpio_deinit(pin1);
-    /// the same for pull_down state, try pull up case (passive)
+    /// try pull up case (passive)
     gpio_init(pin0);
     gpio_set_dir(pin0, GPIO_IN);
     gpio_pull_up(pin0);
@@ -479,23 +500,6 @@ static int testPins(uint32_t pin0, uint32_t pin1) {
         }
     }
     return res;
-}
-
-inline static void _flash_do_cmd(const uint8_t *tx, uint8_t *rx, size_t count) {
-    multicore_lockout_start_blocking();
-    const uint32_t ints = save_and_disable_interrupts();
-    flash_do_cmd(tx, rx, count);
-    restore_interrupts(ints);
-    multicore_lockout_end_blocking();
-}
-
-static void get_cpu_flash_jedec_id(uint8_t _rx[4]) {
-    static uint8_t rx[4] = {0};
-    if (rx[0] == 0) {
-        uint8_t tx[4] = {0x9f};
-        _flash_do_cmd(tx, rx, 4);
-    }
-    *(unsigned*)_rx = *(unsigned*)rx;
 }
 
 static pwm_config config = pwm_get_default_config();
@@ -800,6 +804,7 @@ int main() {
     }
 
     keyboard_init();
+    sleep_ms(50);
 
 #if PICO_RP2350
     #ifdef BUTTER_PSRAM_GPIO
@@ -838,6 +843,7 @@ int main() {
     #endif
 #endif
     nespad_begin(clock_get_hz(clk_sys) / 1000, NES_GPIO_CLK, NES_GPIO_DATA, NES_GPIO_LAT);
+    sleep_ms(50);
 
     if (!isInterrupted()) {
         uint8_t rx[4];
@@ -936,8 +942,6 @@ int main() {
     }
     goutf(y++, false, "DONE");
 skip_it:
-    draw_text("S(A) - try PWM, L(SELECT) - left, R(START) - right", 0, y++, 7, 0);
-    draw_text("I(B) - try i2s sound (+L/R)", 0, y++, 7, 0);
     draw_text("         Red on Gray         ", 0, y++, 12, 7);
     draw_text("        Blue on Green        ", 0, y++, 1, 2);
     draw_text("       Marin on Red          ", 0, y++, 3, 4);
@@ -947,9 +951,7 @@ skip_it:
     draw_text("      Yellow on LightBlue    ", 0, y++, 6, 11);
     draw_text("       White on LightMagenta ", 0, y++, 15, 13);
     draw_text(" LightYellow on Black ", 0, y++, 14, 0);
-
-    draw_text("Freq. - NumPad +/- 4MHz; Ins/Del - 40MHz", 0, TEXTMODE_ROWS - 3, 7, 0);
-    draw_text("F - Flash info; P - PSRAM", 0, TEXTMODE_ROWS - 2, 7, 0);
+    footer();
 
     for (int i = 0; i < 8; i++) {
         sleep_ms(short_light);
@@ -958,21 +960,20 @@ skip_it:
         gpio_put(PICO_DEFAULT_LED_PIN, false);
     }
 
-    bool pwm_init = false;
     while(true) {
         uint32_t nstate = nespad_state;
         uint32_t nstate2 = nespad_state2;
         bool S = isSpeaker();
         bool I = isI2S();
-        bool L = Lpressed || (nespad_state & DPAD_SELECT) || (nespad_state2 & DPAD_SELECT);
-        bool R = Rpressed || (nespad_state & DPAD_START) || (nespad_state2 & DPAD_START);
+        bool L = Lpressed || (nstate & DPAD_SELECT) || (nstate2 & DPAD_SELECT);
+        bool R = Rpressed || (nstate &  DPAD_START) || (nstate2 &  DPAD_START);
         if (!i2s_1nit && (S || R || L)) {
-            if (!pwm_init) {
+            if (!pwm_1nit) {
                 PWM_init_pin(BEEPER_PIN, (1 << 12) - 1);
                 PWM_init_pin(PWM_PIN0  , (1 << 12) - 1);
                 PWM_init_pin(PWM_PIN1  , (1 << 12) - 1);
-                draw_text(" (Ctrl+Alt+Del - restart to test i2s)               ", 0, y, 7, 0);
-                pwm_init = true;
+                pwm_1nit = true;
+                footer();
             }
             if (S) pwm_set_gpio_level(BEEPER_PIN, (1 << 12) - 1);
             if (R) pwm_set_gpio_level(PWM_PIN0  , (1 << 12) - 1);
@@ -983,9 +984,8 @@ skip_it:
             if (L) pwm_set_gpio_level(PWM_PIN1  , 0);
             sleep_ms(1);
         }
-        else if (!pwm_init && I) {
+        else if (!pwm_1nit && I) {
             if (!i2s_1nit) {
-                draw_text(" (Ctrl+Alt+Del - restart to test PWM)               ", 0, y - 1, 7, 0);
                 i2s_config.dma_trans_count = samples >> 1;
                 i2s_init(&i2s_config);
                 for (int i = 0; i < samples; ++i) {
@@ -1001,6 +1001,7 @@ skip_it:
                     samplesLR[i][1] = v;
                 }
                 i2s_1nit = true;
+                footer();
             }
         }
         else if (i2s_1nit && (L || R)) {
@@ -1016,150 +1017,4 @@ skip_it:
             goutf(TEXTMODE_ROWS - 2, false, "NES PAD: %04Xh %04Xh                                ", nespad_state, nespad_state2);
     }
     __unreachable();
-}
-
-// W/A
-#define printf(...) goutf(y++, false, __VA_ARGS__)
-// --- Список производителей по JEDEC ID ---
-typedef struct {
-    uint8_t id;
-    const char *name;
-} jedec_vendor_t;
-
-jedec_vendor_t vendors[] = {
-    {0xEF, "Winbond"},
-    {0xC2, "Macronix"},
-    {0x20, "Micron"},
-    {0x1F, "Atmel"},
-    {0x9D, "ISSI"},
-    {0x01, "Spansion"},
-    {0x00, "Unknown"}
-};
-
-// --- Функция для поиска имени производителя ---
-inline static const char* get_vendor_name(uint8_t id) {
-    for (size_t i = 0; i < sizeof(vendors) / sizeof(vendors[0]); i++) {
-        if (vendors[i].id == id) return vendors[i].name;
-    }
-    return "Unknown";
-}
-
-// --- Функция расшифровки битов статусного регистра ---
-inline static void print_status_bits(uint8_t status) {
-    printf("  - Write Protect (WP): %s", (status & 0x80) ? "Enabled" : "Disabled");
-    printf("  - Block Protect (BP): %s", (status & 0x0C) ? "Enabled" : "Disabled");
-    printf("  - Write In Progress (WIP): %s", (status & 0x01) ? "Yes" : "No");
-}
-
-// --- Расшифровка Memory Type ---
-inline static const char* get_memory_type(uint8_t type) {
-    switch (type) {
-        case 0x20: return "NOR Flash (Micron, Spansion, ISSI)";
-        case 0x40: return "Serial NOR Flash (Winbond, Macronix, GigaDevice)";
-        case 0x60: return "Parallel NOR Flash";
-        case 0x70: return "NAND Flash (Micron, Samsung)";
-        case 0x80: return "EEPROM / OTP Memory";
-        case 0x90: return "Multi-Level Cell (MLC) NAND Flash";
-        case 0xD0: return "Quad-SPI NOR Flash";
-        default:   return "Unknown type of memory";
-    }
-}
-
-// --- Универсальная функция для чтения информации о SPI Flash ---
-static void get_flash_info() {
-    uint8_t rx[16] = {0};
-
-    // --- Читаем JEDEC ID (0x9F) ---
-    uint8_t cmd_jedec[4] = {0x9F, 0, 0, 0}; 
-    _flash_do_cmd(cmd_jedec, rx, 4);
-    printf("=== JEDEC ID (9Fh) ===");
-    printf("Manufacturer: %02X-%02X %s", rx[0], rx[1], get_vendor_name(rx[1]));
-    printf("Memory Type:  0x%02X %s", rx[2], get_memory_type(rx[2]));
-    printf("Capacity:     0x%02X %d B", rx[3], 1 << rx[3]);
-
-    // --- Читаем Manufacturer ID (0x90) ---
-    uint8_t cmd_mfid[5] = {0x90, 0x00, 0x00, 0x00, 0x00}; 
-    _flash_do_cmd(cmd_mfid, rx, 2);
-    printf("=== Manufacturer ID (90h) ===");
-    printf("Manufacturer: 0x%02X", rx[0]);
-    printf("Device ID:    0x%02X", rx[1]);
-
-    // --- Читаем SFDP (0x5A) ---
-    uint8_t cmd_sfdp[5] = {0x5A, 0x00, 0x00, 0x00, 0x00}; 
-    _flash_do_cmd(cmd_sfdp, rx, 8);
-    printf("=== SFDP Header (5Ah) ===");
-    printf("Signature:    %c%c%c%c", rx[0], rx[1], rx[2], rx[3]);
-    printf("SFDP Version: 0x%02X%02X", rx[4], rx[5]);
-
-    // --- Читаем Unique ID (0x4B) ---
-    uint8_t cmd_uid[5] = {0x4B, 0, 0, 0, 0};  
-    _flash_do_cmd(cmd_uid, rx, 8);
-    printf("=== Unique ID (4Bh) ===");
-    printf("ID: %02X %02X %02X %02X %02X %02X %02X %02X",
-           rx[0], rx[1], rx[2], rx[3], rx[4], rx[5], rx[6], rx[7]);
-
-    // --- Читаем регистры статуса (0x05 и 0x35) ---
-    uint8_t cmd_status1[2] = {0x05, 0};  
-    _flash_do_cmd(cmd_status1, rx, 2);
-    printf("=== Status Register 1 (05h) ===");
-    printf("Raw Value: 0x%02X", rx[0]);
-    print_status_bits(rx[0]);
-
-    uint8_t cmd_status2[2] = {0x35, 0};  
-    _flash_do_cmd(cmd_status2, rx, 2);
-    printf("=== Status Register 2 (35h) ===");
-    printf("Raw Value: 0x%02X", rx[0]);
-    printf("  - Quad Enable (QE): %s", (rx[0] & 0x02) ? "Enabled" : "Disabled");
-}
-
-// Таблица производителей PSRAM по JEDEC ID
-typedef struct {
-    uint8_t id;
-    const char *name;
-} psram_vendor_t;
-
-psram_vendor_t psram_vendors[] = {
-    {0x0D, "AP Memory"},
-    {0xC8, "GigaDevice"},
-    {0x85, "ESMT"},
-    {0xA1, "Alliance Memory"},
-    {0x00, "Unknown"}
-};
-
-// --- Функция поиска производителя по MFID ---
-inline static const char* get_psram_vendor(uint8_t id) {
-    for (size_t i = 0; i < sizeof(psram_vendors) / sizeof(psram_vendors[0]); i++) {
-        if (psram_vendors[i].id == id) return psram_vendors[i].name;
-    }
-    return "Unknown";
-}
-
-inline static const char* get_kgd_status(uint8_t kgd) {
-    switch (kgd) {
-        case 0x00: return "Reject";
-        case 0x01: return "Good Die";
-        case 0x02: return "Limited";
-        default:   return "Unknown";
-    }
-}
-
-static void print_psram_info() {
-    uint32_t psram32 = psram_size();
-    if (!psram32) {
-        printf("No PSRAM");
-        return;
-    }
-    uint8_t rx8[8];
-    psram_id(rx8);
-
-    printf("PSRAM %d MB; MFID: %02X (%s)",
-           psram32 >> 20, 
-           rx8[0], get_psram_vendor(rx8[0])  // Производитель
-    );
-    printf("Known Good Die: %02X (%s)",
-        rx8[1], get_kgd_status(rx8[1])            // KGD (тестирование)
-    );
-    printf("EID: %02X%02X-%02X%02X-%02X%02X",
-           rx8[2], rx8[3], rx8[4], rx8[5], rx8[6], rx8[7] // Extended ID (серийник)
-    );
 }

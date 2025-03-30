@@ -34,7 +34,7 @@ option(MURM20 "Murmulator 2.0" OFF)
 #set(TV ON)
 #set(SOFTTV ON)
 
-set(VERSION "1.1.5")
+set(VERSION "1.1.6")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
