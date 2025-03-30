@@ -2,11 +2,10 @@
 #include <pico/multicore.h>
 #include <hardware/flash.h>
 #include "psram_spi.h"
-
-void goutf(int outline, bool err, const char *__restrict str, ...);
-extern volatile int y;
-// W/A
-#define printf(...) goutf(y++, false, __VA_ARGS__)
+extern "C" {
+    #include "sd_util.h"
+    extern volatile int y;
+}
 
 inline static void _flash_do_cmd(const uint8_t *tx, uint8_t *rx, size_t count) {
     multicore_lockout_start_blocking();
@@ -167,4 +166,8 @@ void print_psram_info() {
     printf("EID: %02X%02X-%02X%02X-%02X%02X",
            rx8[2], rx8[3], rx8[4], rx8[5], rx8[6], rx8[7] // Extended ID (серийник)
     );
+}
+
+void get_sdcard_info() {
+
 }

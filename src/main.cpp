@@ -14,17 +14,18 @@
 #include "graphics.h"
 
 extern "C" volatile bool SELECT_VGA = true;
+extern "C" volatile int y = 0;
 
 #include "psram_spi.h"
 #include "nespad.h"
 #include "ff.h"
 
-volatile int y = 0;
 void print_psram_info();
 void get_flash_info();
+void get_sdcard_info();
 void get_cpu_flash_jedec_id(uint8_t _rx[4]);
 
-void goutf(int outline, bool err, const char *__restrict str, ...) {
+extern "C" void goutf(int outline, bool err, const char *__restrict str, ...) {
     va_list ap;
     char buf[80];
     va_start(ap, str);
@@ -160,7 +161,7 @@ static void footer() {
     else
         draw_text("I(B) - try i2s sound (+L/R)                         ", 0, TEXTMODE_ROWS - 4, 7, 0);
     draw_text("Freq. - NumPad +/- 4MHz; Ins/Del - 40MHz            ", 0, TEXTMODE_ROWS - 3, 7, 0);
-    draw_text("F - Flash info; P - PSRAM                           ", 0, TEXTMODE_ROWS - 2, 7, 0);
+    draw_text("F - Flash info; P - PSRAM; D - SD CARD              ", 0, TEXTMODE_ROWS - 2, 7, 0);
 }
 
 extern "C" {
@@ -203,6 +204,12 @@ extern "C" {
         }
         else if (ps2scancode == 0xB8) {
             altPressed = false;
+        }
+        else if (ps2scancode == 0x20) { // D is down (SD CARD info)
+            clrScr(0);
+            y = 0;
+            get_sdcard_info();
+            footer();
         }
         else if (ps2scancode == 0x21) { // F is down (Flash info)
             clrScr(0);
@@ -942,15 +949,15 @@ int main() {
     }
     goutf(y++, false, "DONE");
 skip_it:
-    draw_text("         Red on Gray         ", 0, y++, 12, 7);
+    draw_text("         Red on White        ", 0, y++, 12, 15);
     draw_text("        Blue on Green        ", 0, y++, 1, 2);
     draw_text("       Marin on Red          ", 0, y++, 3, 4);
     draw_text("     Magenta on Yellow       ", 0, y++, 5, 6);
-    draw_text("        Gray on Black        ", 0, y++, 7, 8);
+//    draw_text("        Gray on Black        ", 0, y++, 7, 8);
     draw_text("        Blue on LightGreen   ", 0, y++, 9, 10);
     draw_text("      Yellow on LightBlue    ", 0, y++, 6, 11);
     draw_text("       White on LightMagenta ", 0, y++, 15, 13);
-    draw_text(" LightYellow on Black ", 0, y++, 14, 0);
+    draw_text(" LightYellow on Gray         ", 0, y++, 14, 7);
     footer();
 
     for (int i = 0; i < 8; i++) {
