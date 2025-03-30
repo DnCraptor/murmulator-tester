@@ -32,10 +32,6 @@ void tuh_xinput_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t c
 
     gamepad1_bits.select = p->wButtons & XINPUT_GAMEPAD_BACK;
     gamepad1_bits.start = p->wButtons & XINPUT_GAMEPAD_START;
-    if (gamepad1_bits.select && gamepad1_bits.start) {
-        watchdog_enable(10, true);
-        while (true) sleep_ms(10);
-    }
 
     const uint8_t dpad = p->wButtons & 0xf;
     bool up, down, right, left;

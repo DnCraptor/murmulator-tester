@@ -69,13 +69,13 @@ inline bool isSpeaker() {
     nespad_read();
     uint32_t nstate = nespad_state;
     uint32_t nstate2 = nespad_state2;
-    return pressed_key[HID_KEY_S] || (nstate & DPAD_A) || (nstate2 & DPAD_A) || (mouse_buttons & MOUSE_BUTTON_MIDDLE);
+    return pressed_key[HID_KEY_S] || (nstate & DPAD_A) || (nstate2 & DPAD_A) || (mouse_buttons & MOUSE_BUTTON_MIDDLE) || gamepad1_bits.a;
 }
 
 inline bool isI2S() {
     uint32_t nstate = nespad_state;
     uint32_t nstate2 = nespad_state2;
-    return pressed_key[HID_KEY_I] || (nstate & DPAD_B) || (nstate2 == DPAD_B);
+    return pressed_key[HID_KEY_I] || (nstate & DPAD_B) || (nstate2 == DPAD_B) || gamepad1_bits.b;
 }
 
 inline bool isInterrupted() {
@@ -1103,6 +1103,7 @@ skip_it:
         gpio_put(PICO_DEFAULT_LED_PIN, false);
     }
 
+    uint8_t ov = *(uint8_t*)&gamepad1_bits;
     while(true) {
         #if SDCARD_INFO        
         if (pressed_key[HID_KEY_D]) { // D is down (SD CARD info)
@@ -1128,8 +1129,8 @@ skip_it:
         uint32_t nstate2 = nespad_state2;
         bool S = isSpeaker();
         bool I = isI2S();
-        bool L = pressed_key[HID_KEY_L] || (nstate & DPAD_SELECT) || (nstate2 & DPAD_SELECT) || (mouse_buttons & MOUSE_BUTTON_LEFT);
-        bool R = pressed_key[HID_KEY_R] || (nstate &  DPAD_START) || (nstate2 &  DPAD_START) || (mouse_buttons & MOUSE_BUTTON_RIGHT);
+        bool L = pressed_key[HID_KEY_L] || (nstate & DPAD_SELECT) || (nstate2 & DPAD_SELECT) || (mouse_buttons & MOUSE_BUTTON_LEFT ) || gamepad1_bits.select;
+        bool R = pressed_key[HID_KEY_R] || (nstate &  DPAD_START) || (nstate2 &  DPAD_START) || (mouse_buttons & MOUSE_BUTTON_RIGHT) || gamepad1_bits.start;
         if (!i2s_1nit && (S || R || L)) {
             if (!pwm_1nit) {
                 PWM_init_pin(BEEPER_PIN, (1 << 12) - 1);
@@ -1176,8 +1177,13 @@ skip_it:
         else {
             sleep_ms(100);
         }
-        if (nstate != nespad_state || nstate2 != nespad_state2)
+        if (nstate != nespad_state || nstate2 != nespad_state2) {
             goutf(TEXTMODE_ROWS - 2, false, "NES PAD: %04Xh %04Xh                                ", nespad_state, nespad_state2);
+        }
+        uint8_t nv = *(uint8_t*)&gamepad1_bits;
+        if (nv != ov) {
+            goutf(TEXTMODE_ROWS - 2, false, "USB PAD: %02Xh                                      ", nv);
+        }
     }
     __unreachable();
 }

@@ -12,7 +12,7 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico CACHE STRING "Board type")
+set(PICO_BOARD pico2 CACHE STRING "Board type")
 
 cmake_minimum_required(VERSION 3.22)
 include(pico_sdk_import.cmake)
@@ -28,13 +28,13 @@ option(TV "Enable TV composite output" OFF)
 option(SOFTTV "Enable TV soft composite output" OFF)
 option(MURM20 "Murmulator 2.0" OFF)
 
-#set(MURM20 ON)
+set(MURM20 ON)
 #set(TFT ON)
 #set(ILI9341 ON)
 #set(TV ON)
 #set(SOFTTV ON)
 
-set(VERSION "1.2.1")
+set(VERSION "1.2.2")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
