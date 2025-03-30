@@ -161,7 +161,11 @@ static void footer() {
     else
         draw_text("I(B) - try i2s sound (+L/R)                         ", 0, TEXTMODE_ROWS - 4, 7, 0);
     draw_text("Freq. - NumPad +/- 4MHz; Ins/Del - 40MHz            ", 0, TEXTMODE_ROWS - 3, 7, 0);
+#if SDCARD_INFO        
     draw_text("F - Flash info; P - PSRAM; D - SD CARD              ", 0, TEXTMODE_ROWS - 2, 7, 0);
+#else
+    draw_text("F - Flash info; P - PSRAM                           ", 0, TEXTMODE_ROWS - 2, 7, 0);
+#endif
 }
 
 extern "C" {
@@ -205,12 +209,14 @@ extern "C" {
         else if (ps2scancode == 0xB8) {
             altPressed = false;
         }
+#if SDCARD_INFO        
         else if (ps2scancode == 0x20) { // D is down (SD CARD info)
             clrScr(0);
             y = 0;
             get_sdcard_info();
             footer();
         }
+#endif
         else if (ps2scancode == 0x21) { // F is down (Flash info)
             clrScr(0);
             y = 0;
@@ -804,12 +810,14 @@ int main() {
     }
 
     FATFS fs;
+    draw_text("Init SDCARD", 0, TEXTMODE_ROWS - 1, 7, 0);
     if (f_mount(&fs, "SD", 1) == FR_OK) {
         goutf(y++, false, "SDCARD %d FATs; %d free clusters (%d KB each)", fs.n_fats, f_getfree32(&fs), fs.csize >> 1);
     } else {
         draw_text("SDCARD not connected", 0, y++, 12, 0);
     }
 
+    draw_text("Init keyboard", 0, TEXTMODE_ROWS - 1, 7, 0);
     keyboard_init();
     sleep_ms(50);
 
@@ -849,10 +857,12 @@ int main() {
     }
     #endif
 #endif
+    draw_text("Init NESPAD  ", 0, TEXTMODE_ROWS - 1, 7, 0);
     nespad_begin(clock_get_hz(clk_sys) / 1000, NES_GPIO_CLK, NES_GPIO_DATA, NES_GPIO_LAT);
     sleep_ms(50);
 
     if (!isInterrupted()) {
+        draw_text("Test FLASH   ", 0, TEXTMODE_ROWS - 1, 7, 0);
         uint8_t rx[4];
         get_cpu_flash_jedec_id(rx);
         uint32_t flash_size = (1 << rx[3]);
@@ -870,7 +880,9 @@ int main() {
         }
     }
     if (!isInterrupted() && no_butterbod) {
+        draw_text("Init PSRAM   ", 0, TEXTMODE_ROWS - 1, 7, 0);
         init_psram();
+        draw_text("Test PSRAM   ", 0, TEXTMODE_ROWS - 1, 7, 0);
         uint32_t psram32 = psram_size();
         if (psram32) {
             uint8_t rx8[8];
