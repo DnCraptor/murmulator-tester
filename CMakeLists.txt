@@ -34,7 +34,7 @@ option(MURM20 "Murmulator 2.0" OFF)
 #set(TV ON)
 #set(SOFTTV ON)
 
-set(VERSION "1.1.6")
+set(VERSION "1.2.0")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -44,7 +44,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
 
-add_subdirectory(drivers/ps2)
+add_subdirectory(drivers/ps2kbd)
 add_subdirectory(drivers/fatfs)
 add_subdirectory(drivers/sdcard)
 add_subdirectory(drivers/nespad)
@@ -81,7 +81,7 @@ pico_set_program_name(${PROJECT_NAME} "Murmulator Tester")
 pico_set_program_version(${PROJECT_NAME} ${VERSION})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-        ps2
+        ps2kbd
         sdcard
         fatfs
         nespad
@@ -99,9 +99,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         hardware_exception
         hardware_pwm
 
-        tinyusb_board
-        tinyusb_device
-        pico_stdio_usb
+#        tinyusb_board
+#        tinyusb_device
+#        pico_stdio_usb
+
+        tinyusb_host tinyusb_board
+#        stdc++
+
 )
 
 #family_configure_device_example(${PROJECT_NAME} noos)
@@ -280,7 +284,7 @@ ENDIF()
 SET(BUILD_NAME "${BUILD_NAME}-${VERSION}")
 
 pico_enable_stdio_uart(${PROJECT_NAME} 0)
-pico_enable_stdio_usb(${PROJECT_NAME} 1)
+pico_enable_stdio_usb(${PROJECT_NAME} 0)
 
 #pico_set_binary_type(${PROJECT_NAME} no_flash)
 #pico_set_binary_type(${PROJECT_NAME} copy_to_ram)

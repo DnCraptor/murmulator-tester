@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <cstdlib>
 #include <cstring>
 #include <math.h>
@@ -19,6 +20,7 @@ extern "C" volatile int y = 0;
 #include "psram_spi.h"
 #include "nespad.h"
 #include "ff.h"
+#include "ps2kbd_mrmltr.h"
 
 void print_psram_info();
 void get_flash_info();
@@ -34,17 +36,25 @@ extern "C" void goutf(int outline, bool err, const char *__restrict str, ...) {
     draw_text(buf, 0, outline, err ? 12 : 7, 0);
 }
 
+struct input_bits_t {
+    bool a: true;
+    bool b: true;
+    bool select: true;
+    bool start: true;
+    bool right: true;
+    bool left: true;
+    bool up: true;
+    bool down: true;
+};
+
+input_bits_t gamepad1_bits = { false, false, false, false, false, false, false, false };
+
 #if PICO_RP2040
 volatile static bool no_butterbod = true;
 #else
 volatile static bool no_butterbod = false;
 #endif
-volatile static bool ctrlPressed = false;
-volatile static bool altPressed = false;
-volatile static bool Spressed = false;
-volatile static bool Lpressed = false;
-volatile static bool Rpressed = false;
-volatile static bool Ipressed = false;
+volatile static uint8_t pressed_key[256] = { 0 };
 volatile static bool i2s_1nit = false;
 volatile static bool pwm_1nit = false;
 volatile static uint32_t cpu = 0;
@@ -58,13 +68,13 @@ inline bool isSpeaker() {
     nespad_read();
     uint32_t nstate = nespad_state;
     uint32_t nstate2 = nespad_state2;
-    return Spressed || (nstate & DPAD_A) || (nstate2 & DPAD_A);
+    return pressed_key[HID_KEY_S] || (nstate & DPAD_A) || (nstate2 & DPAD_A);
 }
 
 inline bool isI2S() {
     uint32_t nstate = nespad_state;
     uint32_t nstate2 = nespad_state2;
-    return Ipressed || (nstate & DPAD_B) || (nstate2 == DPAD_B);
+    return pressed_key[HID_KEY_I] || (nstate & DPAD_B) || (nstate2 == DPAD_B);
 }
 
 inline bool isInterrupted() {
@@ -170,6 +180,7 @@ static void footer() {
 
 extern "C" {
     #include "audio.h"
+#if 0
     #include "ps2.h"
     bool __time_critical_func(handleScancode)(const uint32_t ps2scancode) {
         goutf(TEXTMODE_ROWS - 3, false, "Last scancode: %04Xh                                ", ps2scancode);
@@ -259,7 +270,94 @@ extern "C" {
         }
         return true;
     }
+#endif
 }
+
+
+inline static bool isInReport(hid_keyboard_report_t const *report, const unsigned char keycode) {
+    for (unsigned char i: report->keycode) {
+        if (i == keycode) {
+            return true;
+        }
+    }
+    return false;
+}
+
+extern Ps2Kbd_Mrmltr ps2kbd;
+
+void __not_in_flash_func(process_kbd_report)(
+    hid_keyboard_report_t const *report,
+    hid_keyboard_report_t const *prev_report
+) {
+    goutf(TEXTMODE_ROWS - 3, false, "HID modifiers: %02Xh                                ", report->modifier);
+    pressed_key[HID_KEY_ALT_LEFT] = report->modifier & KEYBOARD_MODIFIER_LEFTALT;
+    pressed_key[HID_KEY_ALT_RIGHT] = report->modifier & KEYBOARD_MODIFIER_RIGHTALT;
+    pressed_key[HID_KEY_CONTROL_LEFT] = report->modifier & KEYBOARD_MODIFIER_LEFTCTRL;
+    pressed_key[HID_KEY_CONTROL_RIGHT] = report->modifier & KEYBOARD_MODIFIER_RIGHTCTRL;
+    for (uint8_t pkc: prev_report->keycode) {
+        if (!pkc) continue;
+        bool key_still_pressed = false;
+        for (uint8_t kc: report->keycode) {
+            if (kc == pkc) {
+                key_still_pressed = true;
+                break;
+            }
+        }
+        if (!key_still_pressed) {
+         ///   kbd_queue_push(pressed_key[pkc], false);
+            pressed_key[pkc] = 0;
+            goutf(TEXTMODE_ROWS - 3, false, "Release hid_code: %02Xh modifiers: %02Xh            ", pkc, report->modifier);
+        }
+    }
+    for (uint8_t kc: report->keycode) {
+        if (!kc) continue;
+        volatile uint8_t* pk = pressed_key + kc;
+        uint8_t hid_code = *pk;
+        if (hid_code == 0) { // it was not yet pressed
+            hid_code = kc;
+            if (hid_code != 0) {
+                *pk = hid_code;
+            ///    kbd_queue_push(hid_code, true);
+                goutf(TEXTMODE_ROWS - 3, false, "Hit hid_code: %02Xh modifiers: %02Xh             ", hid_code, report->modifier);
+            }
+        }
+    }
+    if (pressed_key[HID_KEY_CONTROL_LEFT] && pressed_key[HID_KEY_ALT_LEFT] && pressed_key[HID_KEY_DELETE]) {
+        watchdog_enable(1, 0);
+    }
+    else if (pressed_key[HID_KEY_KEYPAD_ADD]) { // +
+        watchdog_hw->scratch[0] = (cpu + 4) | (vol << 22);
+        watchdog_enable(1, 0);
+    }
+    else if (pressed_key[HID_KEY_KEYPAD_SUBTRACT]) { // -
+        watchdog_hw->scratch[0] = (cpu - 4) | (vol << 22);
+        watchdog_enable(1, 0);
+    }
+    else if (pressed_key[HID_KEY_INSERT]) { // Ins
+        watchdog_hw->scratch[0] = (cpu + 40) | (vol << 22);
+        watchdog_enable(1, 0);
+    }
+    else if (pressed_key[HID_KEY_DELETE]) { // Del
+        watchdog_hw->scratch[0] = (cpu - 40) | (vol << 22);
+        watchdog_enable(1, 0);
+    }
+    else if (pressed_key[HID_KEY_PAGE_UP]) { // PageUp
+        watchdog_hw->scratch[0] = cpu | ((vol + 1) << 22);
+        watchdog_enable(1, 0);
+    }
+    else if (pressed_key[HID_KEY_PAGE_DOWN]) { // PageDown
+        watchdog_hw->scratch[0] = cpu | ((vol - 1) << 22);
+        watchdog_enable(1, 0);
+    }
+
+}
+
+Ps2Kbd_Mrmltr ps2kbd(
+    pio1,
+    KBD_CLOCK_PIN,
+    process_kbd_report
+);
+
 ///static uint16_t dma_buffer[22050 / 60];
 static i2s_config_t i2s_config = {
     .sample_freq = 22050,
@@ -312,9 +410,10 @@ void __time_critical_func(render_core)() {
             }
             */
             last_frame_tick = tick;
+            ps2kbd.tick();
         }
+        tuh_task();
         tick = time_us_64();
-        tight_loop_contents();
     }
     __unreachable();
 }
@@ -335,11 +434,12 @@ static bool __not_in_flash_func(write_flash)(void) {
 }
 
 static void blink(uint32_t pin) {
+    sleep_ms(1000);
     for (uint32_t i = 0; i < pin + 1; ++i) {
         gpio_put(PICO_DEFAULT_LED_PIN, true);
-        sleep_ms(650);
+        sleep_ms(2*650);
         gpio_put(PICO_DEFAULT_LED_PIN, false);
-        sleep_ms(550);
+        sleep_ms(2*550);
     }
     sleep_ms(1000);
 }
@@ -818,7 +918,9 @@ int main() {
     }
 
     draw_text("Init keyboard", 0, TEXTMODE_ROWS - 1, 7, 0);
-    keyboard_init();
+    tuh_init(BOARD_TUH_RHPORT);
+    ps2kbd.init_gpio();
+//    keyboard_init();
     sleep_ms(50);
 
 #if PICO_RP2350
@@ -982,12 +1084,32 @@ skip_it:
     }
 
     while(true) {
+        #if SDCARD_INFO        
+        if (pressed_key[HID_KEY_D]) { // D is down (SD CARD info)
+            clrScr(0);
+            y = 0;
+            get_sdcard_info();
+            footer();
+        } else
+        #endif
+        if (pressed_key[HID_KEY_F]) { // F is down (Flash info)
+            clrScr(0);
+            y = 0;
+            get_flash_info();
+            footer();
+        }
+        else if (pressed_key[HID_KEY_P]) { // P is down (PSRAM info)
+            clrScr(0);
+            y = 0;
+            print_psram_info();
+            footer();
+        }
         uint32_t nstate = nespad_state;
         uint32_t nstate2 = nespad_state2;
         bool S = isSpeaker();
         bool I = isI2S();
-        bool L = Lpressed || (nstate & DPAD_SELECT) || (nstate2 & DPAD_SELECT);
-        bool R = Rpressed || (nstate &  DPAD_START) || (nstate2 &  DPAD_START);
+        bool L = pressed_key[HID_KEY_L] || (nstate & DPAD_SELECT) || (nstate2 & DPAD_SELECT);
+        bool R = pressed_key[HID_KEY_R] || (nstate &  DPAD_START) || (nstate2 &  DPAD_START);
         if (!i2s_1nit && (S || R || L)) {
             if (!pwm_1nit) {
                 PWM_init_pin(BEEPER_PIN, (1 << 12) - 1);
