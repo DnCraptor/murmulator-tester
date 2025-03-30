@@ -20,6 +20,7 @@ extern "C" volatile bool SELECT_VGA = true;
 #include "ff.h"
 
 static volatile int y = 0;
+static void print_psram_info();
 static void get_flash_info();
 
 static void goutf(int outline, bool err, const char *__restrict str, ...) {
@@ -188,6 +189,11 @@ extern "C" {
             clrScr(0);
             y = 0;
             get_flash_info();
+        }
+        else if (ps2scancode == 0x19) { // P is down (PSRAM info)
+            clrScr(0);
+            y = 0;
+            print_psram_info();
         }
         else if (ps2scancode == 0x53 && altPressed && ctrlPressed) {
             watchdog_hw->scratch[0] = cpu | (vol << 22);
@@ -853,9 +859,9 @@ int main() {
     if (!isInterrupted() && no_butterbod) {
         init_psram();
         uint32_t psram32 = psram_size();
-        uint8_t rx8[8];
-        psram_id(rx8);
         if (psram32) {
+            uint8_t rx8[8];
+            psram_id(rx8);
             goutf(y++, false, "PSRAM %d MB; MFID: %02X KGD: %02X EID: %02X%02X-%02X%02X-%02X%02X",
                               psram32 >> 20, rx8[0], rx8[1], rx8[2], rx8[3], rx8[4], rx8[5], rx8[6], rx8[7]);
     
@@ -943,7 +949,7 @@ skip_it:
     draw_text(" LightYellow on Black ", 0, y++, 14, 0);
 
     draw_text("Freq. - NumPad +/- 4MHz; Ins/Del - 40MHz", 0, TEXTMODE_ROWS - 3, 7, 0);
-    draw_text("F - Flash info", 0, TEXTMODE_ROWS - 2, 7, 0);
+    draw_text("F - Flash info; P - PSRAM", 0, TEXTMODE_ROWS - 2, 7, 0);
 
     for (int i = 0; i < 8; i++) {
         sleep_ms(short_light);
@@ -1012,6 +1018,7 @@ skip_it:
     __unreachable();
 }
 
+// W/A
 #define printf(...) goutf(y++, false, __VA_ARGS__)
 // --- Список производителей по JEDEC ID ---
 typedef struct {
@@ -1030,7 +1037,7 @@ jedec_vendor_t vendors[] = {
 };
 
 // --- Функция для поиска имени производителя ---
-const char* get_vendor_name(uint8_t id) {
+inline static const char* get_vendor_name(uint8_t id) {
     for (size_t i = 0; i < sizeof(vendors) / sizeof(vendors[0]); i++) {
         if (vendors[i].id == id) return vendors[i].name;
     }
@@ -1045,7 +1052,7 @@ inline static void print_status_bits(uint8_t status) {
 }
 
 // --- Расшифровка Memory Type ---
-const char* get_memory_type(uint8_t type) {
+inline static const char* get_memory_type(uint8_t type) {
     switch (type) {
         case 0x20: return "NOR Flash (Micron, Spansion, ISSI)";
         case 0x40: return "Serial NOR Flash (Winbond, Macronix, GigaDevice)";
@@ -1103,4 +1110,56 @@ static void get_flash_info() {
     printf("=== Status Register 2 (35h) ===");
     printf("Raw Value: 0x%02X", rx[0]);
     printf("  - Quad Enable (QE): %s", (rx[0] & 0x02) ? "Enabled" : "Disabled");
+}
+
+// Таблица производителей PSRAM по JEDEC ID
+typedef struct {
+    uint8_t id;
+    const char *name;
+} psram_vendor_t;
+
+psram_vendor_t psram_vendors[] = {
+    {0x0D, "AP Memory"},
+    {0xC8, "GigaDevice"},
+    {0x85, "ESMT"},
+    {0xA1, "Alliance Memory"},
+    {0x00, "Unknown"}
+};
+
+// --- Функция поиска производителя по MFID ---
+inline static const char* get_psram_vendor(uint8_t id) {
+    for (size_t i = 0; i < sizeof(psram_vendors) / sizeof(psram_vendors[0]); i++) {
+        if (psram_vendors[i].id == id) return psram_vendors[i].name;
+    }
+    return "Unknown";
+}
+
+inline static const char* get_kgd_status(uint8_t kgd) {
+    switch (kgd) {
+        case 0x00: return "Reject";
+        case 0x01: return "Good Die";
+        case 0x02: return "Limited";
+        default:   return "Unknown";
+    }
+}
+
+static void print_psram_info() {
+    uint32_t psram32 = psram_size();
+    if (!psram32) {
+        printf("No PSRAM");
+        return;
+    }
+    uint8_t rx8[8];
+    psram_id(rx8);
+
+    printf("PSRAM %d MB; MFID: %02X (%s)",
+           psram32 >> 20, 
+           rx8[0], get_psram_vendor(rx8[0])  // Производитель
+    );
+    printf("Known Good Die: %02X (%s)",
+        rx8[1], get_kgd_status(rx8[1])            // KGD (тестирование)
+    );
+    printf("EID: %02X%02X-%02X%02X-%02X%02X",
+           rx8[2], rx8[3], rx8[4], rx8[5], rx8[6], rx8[7] // Extended ID (серийник)
+    );
 }
