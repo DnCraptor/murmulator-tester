@@ -213,7 +213,7 @@ elseif (ZERO)
         KBD_CLOCK_PIN=0
         KBD_DATA_PIN=1
 
-        PICO_DEFAULT_LED_PIN=4
+        PICO_DEFAULT_LED_PIN=17
 
         # NES Gamepad
         NES_GPIO_CLK=7
@@ -221,28 +221,26 @@ elseif (ZERO)
         NES_GPIO_DATA=9
         NES_GPIO_DATA2=10
 
-        PSRAM
+      #  PSRAM
         # PSRAM_MUTEX=1
         PSRAM_SPINLOCK=1
         PSRAM_ASYNC=1
 
-        PSRAM_PIN_CS=11
-        PSRAM_PIN_SCK=12
-        PSRAM_PIN_MOSI=13
-        PSRAM_PIN_MISO=14
+        PSRAM_PIN_CS=2
+        PSRAM_PIN_SCK=3
+        PSRAM_PIN_MOSI=4
+        PSRAM_PIN_MISO=5
 
-        BEEPER_PIN=15
-        #instead of DVI SDA/SCL TODO: test it
-        PWM_PIN0=2
-        PWM_PIN1=3
+        BEEPER_PIN=11
+        PWM_PIN0=12
+        PWM_PIN1=13
 
-        AUDIO_DATA_PIN=15
-        #instead of DVI SDA/SCL TODO: test it
-        AUDIO_CLOCK_PIN=2
-        AUDIO_LCK_PIN=3
+        AUDIO_DATA_PIN=11
+        AUDIO_CLOCK_PIN=12
+        AUDIO_LCK_PIN=13
 
         #TODO: test it
-        AUDIO_IN_GPIO=17
+        AUDIO_IN_GPIO=14
 
        # DEBUG_LOG="/tester.log"
 )

@@ -807,21 +807,21 @@ static const char* const desc[] = {
     "KBD CLK/DATA", // 00 -> 01 PS/2 kbd clk -> data
     "KBD DATA/DVI SDA", // 01 -> 02 PS/2 kbd data -> sd clk
     "DVI SDA/SCL", // 02 -> 03
-    "DVI SCL/LED", // 03 -> 04
-    "LED/USB DP", // 04 -> 05
+    "DVI SCL/?", // 03 -> 04
+    "?/USB DP", // 04 -> 05
     "USB DP/DN", // 05 -> 06
     "USB DN/NES CLK", // 06 -> 07
     "NES CLK/LAT", // 07 -> 08
     "NES LAT/DATA", // 08 -> 09
     "NES DATA/DATA2", // 09 -> 10
-    "NES DATA2/PSRAM CS", // 10 -> 11
-    "PSRAM CS/SCK", // 11 -> 12
-    "PSRAM SCK/MOSI", // 12 -> 13
-    "PSRAM MOSI/MISO", // 13 -> 14
-    "PSRAM MISO/BEEPER", // 14 -> 15
-    "BEEPER/DVI CEC", // 15 -> 16
-    "DVI CEC/AUDIO IN", // 16 -> 17
-    "AUDIO IN/SD SCK", // 17 -> 18
+    "NES DATA2/AUDIO", // 10 -> 11
+    "AUDIO", // 11 -> 12
+    "AUDIO", // 12 -> 13
+    "AUDIO/AUDIO IN", // 13 -> 14
+    "AUDIO IN/?", // 14 -> 15
+    "?/DVI CEC", // 15 -> 16
+    "DVI CEC/LED", // 16 -> 17
+    "LED/SD SCK", // 17 -> 18
     "SD SCK/MOSI", // 18 -> 19
     "SD MOSI/MISO", // 19 -> 20
     "SD MISO/CS", // 20 -> 21
