@@ -12,7 +12,7 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico2 CACHE STRING "Board type")
+set(PICO_BOARD pico CACHE STRING "Board type")
 
 cmake_minimum_required(VERSION 3.22)
 include(pico_sdk_import.cmake)
@@ -27,14 +27,16 @@ option(HDMI "Enable HDMI display" OFF)
 option(TV "Enable TV composite output" OFF)
 option(SOFTTV "Enable TV soft composite output" OFF)
 option(MURM20 "Murmulator 2.0" OFF)
+option(ZERO "RP2040-PiZero" OFF)
 
-set(MURM20 ON)
+set(ZERO ON)
+#set(MURM20 ON)
 #set(TFT ON)
 #set(ILI9341 ON)
 #set(TV ON)
 #set(SOFTTV ON)
 
-set(VERSION "1.2.2")
+set(VERSION "1.2.3")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -183,6 +185,67 @@ if (MURM20)
         AUDIO_DATA_PIN=9
         AUDIO_CLOCK_PIN=10
     )
+elseif (ZERO)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        PROJECT_VERSION="${VERSION}"
+        ZERO=1
+        # VGA 8 pins starts from pin:
+        VGA_BASE_PIN=22
+
+        # HDMI 8 pins starts from pin:
+        HDMI_BASE_PIN=22
+
+        # TFT
+        TFT_CS_PIN=22
+        TFT_RST_PIN=24
+        TFT_LED_PIN=25
+        TFT_DC_PIN=26
+        TFT_DATA_PIN=28
+        TFT_CLK_PIN=29
+
+        # SDCARD
+        SDCARD_PIN_SPI0_SCK=18
+        SDCARD_PIN_SPI0_MOSI=19
+        SDCARD_PIN_SPI0_MISO=20
+        SDCARD_PIN_SPI0_CS=21
+
+        # PS2 keyboard
+        KBD_CLOCK_PIN=0
+        KBD_DATA_PIN=1
+
+        PICO_DEFAULT_LED_PIN=4
+
+        # NES Gamepad
+        NES_GPIO_CLK=7
+        NES_GPIO_LAT=8
+        NES_GPIO_DATA=9
+        NES_GPIO_DATA2=10
+
+        PSRAM
+        # PSRAM_MUTEX=1
+        PSRAM_SPINLOCK=1
+        PSRAM_ASYNC=1
+
+        PSRAM_PIN_CS=11
+        PSRAM_PIN_SCK=12
+        PSRAM_PIN_MOSI=13
+        PSRAM_PIN_MISO=14
+
+        BEEPER_PIN=15
+        #instead of DVI SDA/SCL TODO: test it
+        PWM_PIN0=2
+        PWM_PIN1=3
+
+        AUDIO_DATA_PIN=15
+        #instead of DVI SDA/SCL TODO: test it
+        AUDIO_CLOCK_PIN=2
+        AUDIO_LCK_PIN=3
+
+        #TODO: test it
+        AUDIO_IN_GPIO=17
+
+       # DEBUG_LOG="/tester.log"
+)
 else ()
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         PROJECT_VERSION="${VERSION}"
@@ -225,7 +288,8 @@ else ()
         PSRAM_PIN_MOSI=20
         PSRAM_PIN_MISO=21
 
-        BUTTER_PSRAM_GPIO=19
+#        BUTTER_PSRAM_GPIO=19
+        BUTTER_PSRAM_GPIO=47
 
         PWM_PIN0=26
         PWM_PIN1=27
@@ -248,6 +312,9 @@ else ()
     if (MURM20)
         SET(BUILD_NAME "m2p1-${PROJECT_NAME}")
         target_compile_definitions(${PROJECT_NAME} PRIVATE PLAT="m2p1")
+    elseif (ZERO)
+        SET(BUILD_NAME "z0p1-${PROJECT_NAME}")
+        target_compile_definitions(${PROJECT_NAME} PRIVATE PLAT="z0p1")
     else ()
         SET(BUILD_NAME "m1p1-${PROJECT_NAME}")
         target_compile_definitions(${PROJECT_NAME} PRIVATE PLAT="m1p1")

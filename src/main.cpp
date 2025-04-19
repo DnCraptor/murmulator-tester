@@ -454,6 +454,7 @@ static bool __not_in_flash_func(write_flash)(void) {
 }
 
 static void blink(uint32_t pin) {
+#ifndef ZERO
     sleep_ms(1000);
     for (uint32_t i = 0; i < pin + 1; ++i) {
         gpio_put(PICO_DEFAULT_LED_PIN, true);
@@ -462,6 +463,7 @@ static void blink(uint32_t pin) {
         sleep_ms(2*550);
     }
     sleep_ms(1000);
+#endif
 }
 
 // connection is possible 00->00 (external pull down)
@@ -524,7 +526,9 @@ static int test_1111_case(uint32_t pin0, uint32_t pin1, int res) {
 static int testPins(uint32_t pin0, uint32_t pin1) {
     int res = 0b000000;
     /// do not try to test butter psram this way
+#ifdef BUTTER_PSRAM_GPIO
     if (pin0 == BUTTER_PSRAM_GPIO || pin1 == BUTTER_PSRAM_GPIO) return res;
+#endif
     if (pin0 == PICO_DEFAULT_LED_PIN || pin1 == PICO_DEFAULT_LED_PIN) return res; // LED
     if (pin0 == 23 || pin1 == 23) return res; // SMPS Power
     if (pin0 == 24 || pin1 == 24) return res; // VBus sense
@@ -643,7 +647,11 @@ static void PWM_init_pin(uint8_t pinN, uint16_t max_lvl) {
     pwm_init(pwm_gpio_to_slice_num(pinN), &config, true);
 }
 
+#ifdef ZERO
+#define short_light 1
+#else
 #define short_light 100
+#endif
 
 static const char* get_volt() {
     const char* volt = (const char*)"1.3 V";
@@ -763,7 +771,69 @@ static const char* const desc[] = {
     "", // 27 -> 28
     "", // 28 -> 29
 };
-
+#elif ZERO
+static const bool critical[] = {
+    1, // 00 -> 01 PS/2 kbd clk -> data
+    1, // 01 -> 02 PS/2 kbd data -> sd clk
+    1, // 02 -> 03
+    1, // 03 -> 04
+    1, // 04 -> 05
+    1, // 05 -> 06
+    1, // 06 -> 07
+    1, // 07 -> 08
+    1, // 08 -> 09
+    1, // 09 -> 10
+    1, // 10 -> 11
+    1, // 11 -> 12
+    1, // 12 -> 13
+    1, // 13 -> 14
+    1, // 14 -> 15
+    1, // 15 -> 16
+    1, // 16 -> 17
+    1, // 17 -> 18
+    1, // 18 -> 19
+    1, // 19 -> 20
+    1, // 20 -> 21
+    1, // 21 -> 22
+    1, // 22 -> 23 // hdmi
+    1, // 23 -> 24
+    1, // 24 -> 25
+    1, // 25 -> 26
+    1, // 26 -> 27
+    1, // 27 -> 28
+    1, // 28 -> 29
+};
+static const char* const desc[] = {
+    "KBD CLK/DATA", // 00 -> 01 PS/2 kbd clk -> data
+    "KBD DATA/DVI SDA", // 01 -> 02 PS/2 kbd data -> sd clk
+    "DVI SDA/SCL", // 02 -> 03
+    "DVI SCL/LED", // 03 -> 04
+    "LED/USB DP", // 04 -> 05
+    "USB DP/DN", // 05 -> 06
+    "USB DN/NES CLK", // 06 -> 07
+    "NES CLK/LAT", // 07 -> 08
+    "NES LAT/DATA", // 08 -> 09
+    "NES DATA/DATA2", // 09 -> 10
+    "NES DATA2/PSRAM CS", // 10 -> 11
+    "PSRAM CS/SCK", // 11 -> 12
+    "PSRAM SCK/MOSI", // 12 -> 13
+    "PSRAM MOSI/MISO", // 13 -> 14
+    "PSRAM MISO/BEEPER", // 14 -> 15
+    "BEEPER/DVI CEC", // 15 -> 16
+    "DVI CEC/AUDIO IN", // 16 -> 17
+    "AUDIO IN/SD SCK", // 17 -> 18
+    "SD SCK/MOSI", // 18 -> 19
+    "SD MOSI/MISO", // 19 -> 20
+    "SD MISO/CS", // 20 -> 21
+    "SD CS/DVI D2P", // 21 -> 22
+    "DVI D2 P/N", // 22 -> 23
+    "DVI D2N/D1P", // 23 -> 24
+    "DVI D1 P/N", // 24 -> 25
+    "DVI D1N/D0P", // 25 -> 26
+    "DVI D0 P/N", // 26 -> 27
+    "DVI D0N/CLKP", // 27 -> 28
+    "DVI CLK P/N", // 28 -> 29
+};
 #else
 static const bool critical[] = {
     1, // 00 -> 01 PS/2 kbd clk -> data
@@ -870,20 +940,26 @@ int main() {
         sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, false);
     }
+#ifndef ZERO
     sleep_ms(1000);
+#endif
 
     int links[27] = { false };
     for(uint32_t pin = 0; pin < 28; ++pin) {
         links[pin] = testPins(pin, pin + 1);
     }
+#ifndef ZERO
     SELECT_VGA = (links[VGA_BASE_PIN] == 0) || (links[VGA_BASE_PIN] == 0x1F);
     for(uint32_t pin = VGA_BASE_PIN; pin < VGA_BASE_PIN + 7; ++pin) {
         if ((links[pin] & 0b000001) && (!SELECT_VGA || critical[pin])) {
             blink(pin);
         }
     }
-
     sleep_ms(1000);
+#else
+    SELECT_VGA = false; // HDMI only for now
+#endif
+
     /// main test DONE signal
     for (int i = 0; i < 4; i++) {
         sleep_ms(short_light);
@@ -891,6 +967,8 @@ int main() {
         sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, false);
     }
+    FATFS fs;
+    bool mount_passed = f_mount(&fs, "SD", 1) == FR_OK;
     
     sem_init(&vga_start_semaphore, 0, 1);
     multicore_launch_core1(render_core);
@@ -929,9 +1007,8 @@ int main() {
 #endif
     }
 
-    FATFS fs;
     draw_text("Init SDCARD", 0, TEXTMODE_ROWS - 1, 7, 0);
-    if (f_mount(&fs, "SD", 1) == FR_OK) {
+    if (mount_passed) {
         goutf(y++, false, "SDCARD %d FATs; %d free clusters (%d KB each)", fs.n_fats, f_getfree32(&fs), fs.csize >> 1);
     } else {
         draw_text("SDCARD not connected", 0, y++, 12, 0);
@@ -993,7 +1070,7 @@ int main() {
         );
     
         if (!isInterrupted()) {
-            printf("Test flash write ... ");
+///            printf("Test flash write ... ");
             if (write_flash()) {
                 draw_text(" Test write to FLASH - passed", 0, y++, 7, 0);
             } else {
