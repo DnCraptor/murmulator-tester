@@ -36,3 +36,4 @@ Download the utility from [GitHub](https://github.com/DnCraptor/murmulator-teste
 - Press **Ctrl+Alt+Del** (or the **Reset button** on the board, if available) to reboot.  
 - If nothing works, **power cycle the board** (turn it off and on).
 - Use custom overclocking: "+" or "-" key on NumPad changes CPU frequency by 4 MHz; "Ins" or "Del" key changes CPU frequency by 40 MHz.
+- Also "1" (+4 MHz) and "2" (+40 MHz) - overclocking, "0", "9" - rollback

@@ -345,19 +345,19 @@ void __not_in_flash_func(process_kbd_report)(
     if (pressed_key[HID_KEY_CONTROL_LEFT] && pressed_key[HID_KEY_ALT_LEFT] && pressed_key[HID_KEY_DELETE]) {
         watchdog_enable(1, 0);
     }
-    else if (pressed_key[HID_KEY_KEYPAD_ADD]) { // +
+    else if (pressed_key[HID_KEY_KEYPAD_ADD] || pressed_key[HID_KEY_1]) { // +
         watchdog_hw->scratch[0] = (cpu + 4) | (vol << 22);
         watchdog_enable(1, 0);
     }
-    else if (pressed_key[HID_KEY_KEYPAD_SUBTRACT]) { // -
+    else if (pressed_key[HID_KEY_KEYPAD_SUBTRACT] || pressed_key[HID_KEY_9]) { // -
         watchdog_hw->scratch[0] = (cpu - 4) | (vol << 22);
         watchdog_enable(1, 0);
     }
-    else if (pressed_key[HID_KEY_INSERT]) { // Ins
+    else if (pressed_key[HID_KEY_INSERT] || pressed_key[HID_KEY_2]) { // Ins
         watchdog_hw->scratch[0] = (cpu + 40) | (vol << 22);
         watchdog_enable(1, 0);
     }
-    else if (pressed_key[HID_KEY_DELETE]) { // Del
+    else if (pressed_key[HID_KEY_DELETE] || pressed_key[HID_KEY_0]) { // Del
         watchdog_hw->scratch[0] = (cpu - 40) | (vol << 22);
         watchdog_enable(1, 0);
     }

@@ -12,7 +12,7 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico CACHE STRING "Board type")
+set(PICO_BOARD pico2 CACHE STRING "Board type")
 
 cmake_minimum_required(VERSION 3.22)
 include(pico_sdk_import.cmake)
@@ -29,7 +29,7 @@ option(SOFTTV "Enable TV soft composite output" OFF)
 option(MURM20 "Murmulator 2.0" OFF)
 option(ZERO "RP2040-PiZero" OFF)
 
-set(ZERO ON)
+#set(ZERO ON)
 #set(MURM20 ON)
 #set(TFT ON)
 #set(ILI9341 ON)
