@@ -28,8 +28,12 @@ option(TV "Enable TV composite output" OFF)
 option(SOFTTV "Enable TV soft composite output" OFF)
 option(MURM20 "Murmulator 2.0" OFF)
 option(ZERO "RP2040-PiZero" OFF)
+option(ZERO2 "RP2350-PiZero" OFF)
+
+#set(m1p2 ON)
 
 #set(ZERO ON)
+set(ZERO2 ON)
 #set(MURM20 ON)
 #set(TFT ON)
 #set(ILI9341 ON)
@@ -78,6 +82,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/s
 
 #configure_file(memmap.ld.in memmap.ld @ONLY)
 #pico_set_linker_script(${PROJECT_NAME} ${CMAKE_CURRENT_BINARY_DIR}/memmap.ld)
+if (m1p2)
+    pico_set_linker_script(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/memmap.ld")
+endif ()
 
 pico_set_program_name(${PROJECT_NAME} "Murmulator Tester")
 pico_set_program_version(${PROJECT_NAME} ${VERSION})
@@ -176,7 +183,8 @@ if (MURM20)
         PSRAM_PIN_MOSI=7
         PSRAM_PIN_MISO=4
 
-        BUTTER_PSRAM_GPIO=8
+#        BUTTER_PSRAM_GPIO=8
+        BUTTER_PSRAM_GPIO=47
 
         BEEPER_PIN=9
         PWM_PIN0=10
@@ -244,6 +252,66 @@ elseif (ZERO)
 
        # DEBUG_LOG="/tester.log"
 )
+elseif (ZERO2)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        PROJECT_VERSION="${VERSION}"
+        ZERO=1
+        # VGA 8 pins starts from pin:
+        VGA_BASE_PIN=32
+
+        # HDMI 8 pins starts from pin:
+        HDMI_BASE_PIN=32
+
+        # TFT
+        TFT_CS_PIN=32
+        TFT_RST_PIN=34
+        TFT_LED_PIN=35
+        TFT_DC_PIN=36
+        TFT_DATA_PIN=38
+        TFT_CLK_PIN=39
+
+        # SDCARD
+        SDCARD_PIN_SPI0_SCK=30
+        SDCARD_PIN_SPI0_MOSI=31
+        SDCARD_PIN_SPI0_MISO=40
+        SDCARD_PIN_SPI0_CS=43
+
+        # PS2 keyboard
+        KBD_CLOCK_PIN=0
+        KBD_DATA_PIN=1
+
+        PICO_DEFAULT_LED_PIN=17
+
+        # NES Gamepad
+        NES_GPIO_CLK=7
+        NES_GPIO_LAT=8
+        NES_GPIO_DATA=9
+        NES_GPIO_DATA2=10
+
+        BUTTER_PSRAM_GPIO=47
+      #  PSRAM
+        # PSRAM_MUTEX=1
+        PSRAM_SPINLOCK=1
+        PSRAM_ASYNC=1
+
+        PSRAM_PIN_CS=2
+        PSRAM_PIN_SCK=3
+        PSRAM_PIN_MOSI=4
+        PSRAM_PIN_MISO=5
+
+        BEEPER_PIN=11
+        PWM_PIN0=12
+        PWM_PIN1=13
+
+        AUDIO_DATA_PIN=11
+        AUDIO_CLOCK_PIN=12
+        AUDIO_LCK_PIN=13
+
+        #TODO: test it
+        AUDIO_IN_GPIO=14
+
+       # DEBUG_LOG="/tester.log"
+)
 else ()
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         PROJECT_VERSION="${VERSION}"
@@ -287,7 +355,8 @@ else ()
         PSRAM_PIN_MISO=21
 
 #        BUTTER_PSRAM_GPIO=19
-        BUTTER_PSRAM_GPIO=47
+#        BUTTER_PSRAM_GPIO=47
+DEBUG=1
 
         PWM_PIN0=26
         PWM_PIN1=27
@@ -302,6 +371,9 @@ if (PICO_BOARD MATCHES "pico2")
     if (MURM20)
         SET(BUILD_NAME "m2p2-${PROJECT_NAME}")
         target_compile_definitions(${PROJECT_NAME} PRIVATE PLAT="m2p2")
+    elseif (ZERO2)
+        SET(BUILD_NAME "z2p2-${PROJECT_NAME}")
+        target_compile_definitions(${PROJECT_NAME} PRIVATE PLAT="z2p2")
     else ()
         SET(BUILD_NAME "m1p2-${PROJECT_NAME}")
         target_compile_definitions(${PROJECT_NAME} PRIVATE PLAT="m1p2")
@@ -346,7 +418,9 @@ ELSE()
     SET(BUILD_NAME "${BUILD_NAME}-VGA-HDMI")
 ENDIF()
 
-SET(BUILD_NAME "${BUILD_NAME}-${VERSION}")
+if (m1p2)
+    SET(BUILD_NAME "${BUILD_NAME}-${VERSION}.m1p2")
+endif()
 
 pico_enable_stdio_uart(${PROJECT_NAME} 0)
 pico_enable_stdio_usb(${PROJECT_NAME} 0)
