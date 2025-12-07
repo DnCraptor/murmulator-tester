@@ -12,7 +12,7 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico2 CACHE STRING "Board type")
+set(PICO_BOARD pico CACHE STRING "Board type")
 
 cmake_minimum_required(VERSION 3.22)
 include(pico_sdk_import.cmake)
@@ -33,7 +33,7 @@ option(ZERO2 "RP2350-PiZero" OFF)
 #set(m1p2 ON)
 
 #set(ZERO ON)
-set(ZERO2 ON)
+#set(ZERO2 ON)
 #set(MURM20 ON)
 #set(TFT ON)
 #set(ILI9341 ON)

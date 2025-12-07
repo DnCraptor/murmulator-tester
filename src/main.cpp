@@ -904,7 +904,11 @@ int main() {
     cpu = scratch0 & 0x03FF;
     vol = (scratch0 & 0xFC00) >> 22;
     if (!cpu) cpu = 252;
-    if (!vol) vol = VREG_VOLTAGE_1_60; // VREG_VOLTAGE_1_30;
+#ifdef VREG_VOLTAGE_1_60
+    if (!vol) vol = VREG_VOLTAGE_1_60;
+#else
+    if (!vol) vol = VREG_VOLTAGE_1_30;
+#endif
 
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
