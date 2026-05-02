@@ -454,7 +454,7 @@ static bool __not_in_flash_func(write_flash)(void) {
 }
 
 static void blink(uint32_t pin) {
-#ifndef ZERO
+#ifdef PICO_DEFAULT_LED_PIN
     sleep_ms(1000);
     for (uint32_t i = 0; i < pin + 1; ++i) {
         gpio_put(PICO_DEFAULT_LED_PIN, true);
@@ -529,7 +529,9 @@ static int testPins(uint32_t pin0, uint32_t pin1) {
 #ifdef BUTTER_PSRAM_GPIO
     if (pin0 == BUTTER_PSRAM_GPIO || pin1 == BUTTER_PSRAM_GPIO) return res;
 #endif
+#ifdef PICO_DEFAULT_LED_PIN
     if (pin0 == PICO_DEFAULT_LED_PIN || pin1 == PICO_DEFAULT_LED_PIN) return res; // LED
+#endif
     if (pin0 == 23 || pin1 == 23) return res; // SMPS Power
     if (pin0 == 24 || pin1 == 24) return res; // VBus sense
     // try pull down case (passive)
@@ -909,10 +911,10 @@ int main() {
 #else
     if (!vol) vol = VREG_VOLTAGE_1_30;
 #endif
-
+#ifdef PICO_DEFAULT_LED_PIN
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-
+#endif
     stdio_init_all();
 
     if (vol > VREG_VOLTAGE_1_30)
@@ -936,7 +938,7 @@ int main() {
     psram_init(BUTTER_PSRAM_GPIO);
 #endif
 #endif
-
+#ifdef PICO_DEFAULT_LED_PIN
     /// startup signal
     for (int i = 0; i < 2; i++) {
         sleep_ms(short_light);
@@ -944,7 +946,6 @@ int main() {
         sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, false);
     }
-#ifndef ZERO
     sleep_ms(1000);
 #endif
 
@@ -953,7 +954,11 @@ int main() {
         links[pin] = testPins(pin, pin + 1);
     }
 #ifndef ZERO
-    SELECT_VGA = (links[VGA_BASE_PIN] == 0) || (links[VGA_BASE_PIN] == 0x1F);
+    #ifndef ZERO2
+        SELECT_VGA = links[VGA_BASE_PIN] == 0x1F;
+    #else
+        SELECT_VGA = (links[VGA_BASE_PIN] == 0) || (links[VGA_BASE_PIN] == 0x1F);
+    #endif
     for(uint32_t pin = VGA_BASE_PIN; pin < VGA_BASE_PIN + 7; ++pin) {
         if ((links[pin] & 0b000001) && (!SELECT_VGA || critical[pin])) {
             blink(pin);
@@ -965,12 +970,14 @@ int main() {
 #endif
 
     /// main test DONE signal
+#ifdef PICO_DEFAULT_LED_PIN
     for (int i = 0; i < 4; i++) {
         sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, true);
         sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, false);
     }
+#endif
     FATFS fs;
     bool mount_passed = f_mount(&fs, "SD", 1) == FR_OK;
     
@@ -1083,6 +1090,7 @@ int main() {
         }
     }
     if (!isInterrupted() && no_butterbod) {
+        #if PSRAM
         draw_text("Init PSRAM   ", 0, TEXTMODE_ROWS - 1, 7, 0);
         init_psram();
         draw_text("Test PSRAM   ", 0, TEXTMODE_ROWS - 1, 7, 0);
@@ -1159,7 +1167,9 @@ int main() {
             speed = d * a / elapsed;
             goutf(y++, false, "32-bit line read speed : %f MBps", speed);
             draw_text("             ", 0, TEXTMODE_ROWS - 1, 7, 0);
-        } else {
+        } else
+        #endif
+        {
             goutf(y++, false, "No PSRAM detected");
             draw_text("No   PSRAM   ", 0, TEXTMODE_ROWS - 1, 7, 0);
         }
@@ -1176,14 +1186,14 @@ skip_it:
     draw_text("       White on LightMagenta ", 0, y++, 15, 13);
     draw_text(" LightYellow on Gray         ", 0, y++, 14, 7);
     footer();
-
+#ifdef PICO_DEFAULT_LED_PIN
     for (int i = 0; i < 8; i++) {
         sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, true);
         sleep_ms(short_light);
         gpio_put(PICO_DEFAULT_LED_PIN, false);
     }
-
+#endif
     uint8_t ov = *(uint8_t*)&gamepad1_bits;
     while(true) {
         #if SDCARD_INFO        

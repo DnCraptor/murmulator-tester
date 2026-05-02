@@ -15,10 +15,6 @@ endif()
 set(PICO_BOARD pico2 CACHE STRING "Board type")
 
 cmake_minimum_required(VERSION 3.22)
-include(pico_sdk_import.cmake)
-
-project(murmulator-tester C CXX ASM)
-pico_sdk_init()
 
 option(VGA "Enable VGA" OFF)
 option(TFT "Enable TFT display" OFF)
@@ -27,14 +23,12 @@ option(HDMI "Enable HDMI display" OFF)
 option(TV "Enable TV composite output" OFF)
 option(SOFTTV "Enable TV soft composite output" OFF)
 option(MURM20 "Murmulator 2.0" OFF)
-option(ZERO "RP2040-PiZero" OFF)
 option(ZERO2 "RP2350-PiZero" OFF)
 
-#set(m1p2 ON)
-
-#set(ZERO ON)
-#set(ZERO2 ON)
-set(MURM20 ON)
+set(ZERO2 ON)
+#set(MURM20 ON)
+#set(VGA ON)
+#set(HDMI ON)
 #set(TFT ON)
 #set(ILI9341 ON)
 #set(TV ON)
@@ -49,6 +43,18 @@ set(OUTPUT_DIR "${CMAKE_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
+
+IF(ZERO2)
+    # For Board RP2350-PiZero
+    set(PICO_BOARD_HEADER_DIRS ${CMAKE_SOURCE_DIR}/src/boards)
+    set(PICO_BOARD waveshare_rp2350_pizero CACHE STRING "Board type" FORCE)
+    set(PICO_PLATFORM rp2350-arm-s)
+    set(CPU_MHZ 252)
+ENDIF()
+include(pico_sdk_import.cmake)
+
+project(murmulator-tester C CXX ASM)
+pico_sdk_init()
 
 add_subdirectory(drivers/ps2kbd)
 add_subdirectory(drivers/fatfs)
@@ -193,125 +199,39 @@ if (MURM20)
         AUDIO_DATA_PIN=9
         AUDIO_CLOCK_PIN=10
     )
-elseif (ZERO)
+ELSEIF(ZERO2)
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         PROJECT_VERSION="${VERSION}"
-        ZERO=1
-        # VGA 8 pins starts from pin:
-        VGA_BASE_PIN=22
-
-        # HDMI 8 pins starts from pin:
-        HDMI_BASE_PIN=22
-
-        # TFT
-        TFT_CS_PIN=22
-        TFT_RST_PIN=24
-        TFT_LED_PIN=25
-        TFT_DC_PIN=26
-        TFT_DATA_PIN=28
-        TFT_CLK_PIN=29
-
-        # SDCARD
-        SDCARD_PIN_SPI0_SCK=18
-        SDCARD_PIN_SPI0_MOSI=19
-        SDCARD_PIN_SPI0_MISO=20
-        SDCARD_PIN_SPI0_CS=21
-
-        # PS2 keyboard
-        KBD_CLOCK_PIN=0
-        KBD_DATA_PIN=1
-
-        PICO_DEFAULT_LED_PIN=17
-
-        # NES Gamepad
-        NES_GPIO_CLK=7
-        NES_GPIO_LAT=8
-        NES_GPIO_DATA=9
-        NES_GPIO_DATA2=10
-
-      #  PSRAM
-        # PSRAM_MUTEX=1
-        PSRAM_SPINLOCK=1
-        PSRAM_ASYNC=1
-
-        PSRAM_PIN_CS=2
-        PSRAM_PIN_SCK=3
-        PSRAM_PIN_MOSI=4
-        PSRAM_PIN_MISO=5
-
-        BEEPER_PIN=11
-        PWM_PIN0=12
-        PWM_PIN1=13
-
-        AUDIO_DATA_PIN=11
-        AUDIO_CLOCK_PIN=12
-        AUDIO_LCK_PIN=13
-
-        #TODO: test it
-        AUDIO_IN_GPIO=14
-
-       # DEBUG_LOG="/tester.log"
-)
-elseif (ZERO2)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE
-        PROJECT_VERSION="${VERSION}"
-        ZERO=1
+        ZERO2=1
         # VGA 8 pins starts from pin:
         VGA_BASE_PIN=32
 
         # HDMI 8 pins starts from pin:
         HDMI_BASE_PIN=32
 
-        # TFT
-        TFT_CS_PIN=32
-        TFT_RST_PIN=34
-        TFT_LED_PIN=35
-        TFT_DC_PIN=36
-        TFT_DATA_PIN=38
-        TFT_CLK_PIN=39
+        # PS2 keyboard (moved from GPIO 2/3 for PCM5122 I2C)
+        KBD_CLOCK_PIN=14
+        KBD_DATA_PIN=15
 
-        # SDCARD
+        AUDIO_DATA_PIN=10 # DIN
+        AUDIO_CLOCK_PIN=11 # BCK, 12 # LRCK
+
+        PWM_PIN0=10
+        PWM_PIN1=11
+        BEEPER_PIN=12
+        
+        USE_NESPAD
+        NES_GPIO_CLK=4
+        NES_GPIO_LAT=5
+        NES_GPIO_DATA=7
+        NES_GPIO_DATA2=8
+
+        SDCARD_SPI_BUS=spi1
         SDCARD_PIN_SPI0_SCK=30
         SDCARD_PIN_SPI0_MOSI=31
         SDCARD_PIN_SPI0_MISO=40
         SDCARD_PIN_SPI0_CS=43
-
-        # PS2 keyboard
-        KBD_CLOCK_PIN=0
-        KBD_DATA_PIN=1
-
-        PICO_DEFAULT_LED_PIN=17
-
-        # NES Gamepad
-        NES_GPIO_CLK=7
-        NES_GPIO_LAT=8
-        NES_GPIO_DATA=9
-        NES_GPIO_DATA2=10
-
-        BUTTER_PSRAM_GPIO=47
-      #  PSRAM
-        # PSRAM_MUTEX=1
-        PSRAM_SPINLOCK=1
-        PSRAM_ASYNC=1
-
-        PSRAM_PIN_CS=2
-        PSRAM_PIN_SCK=3
-        PSRAM_PIN_MOSI=4
-        PSRAM_PIN_MISO=5
-
-        BEEPER_PIN=11
-        PWM_PIN0=12
-        PWM_PIN1=13
-
-        AUDIO_DATA_PIN=11
-        AUDIO_CLOCK_PIN=12
-        AUDIO_LCK_PIN=13
-
-        #TODO: test it
-        AUDIO_IN_GPIO=14
-
-       # DEBUG_LOG="/tester.log"
-)
+    )
 else ()
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         PROJECT_VERSION="${VERSION}"
@@ -367,13 +287,13 @@ DEBUG=1
     )
 endif ()
 
-if (PICO_BOARD MATCHES "pico2")
+if (PICO_BOARD MATCHES "waveshare_rp2350_pizero")
+    SET(BUILD_NAME "z0p2-${PROJECT_NAME}")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE PLAT="z0p2")
+elseif (PICO_BOARD MATCHES "pico2")
     if (MURM20)
         SET(BUILD_NAME "m2p2-${PROJECT_NAME}")
         target_compile_definitions(${PROJECT_NAME} PRIVATE PLAT="m2p2")
-    elseif (ZERO2)
-        SET(BUILD_NAME "z2p2-${PROJECT_NAME}")
-        target_compile_definitions(${PROJECT_NAME} PRIVATE PLAT="z2p2")
     else ()
         SET(BUILD_NAME "m1p2-${PROJECT_NAME}")
         target_compile_definitions(${PROJECT_NAME} PRIVATE PLAT="m1p2")

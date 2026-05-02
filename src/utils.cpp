@@ -148,6 +148,7 @@ inline static const char* get_kgd_status(uint8_t kgd) {
 }
 
 void print_psram_info() {
+#if PSRAM
     uint32_t psram32 = psram_size();
     if (!psram32) {
         printf("No PSRAM");
@@ -166,6 +167,7 @@ void print_psram_info() {
     printf("EID: %02X%02X-%02X%02X-%02X%02X",
            rx8[2], rx8[3], rx8[4], rx8[5], rx8[6], rx8[7] // Extended ID (серийник)
     );
+#endif
 }
 
 void get_sdcard_info() {

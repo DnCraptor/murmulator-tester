@@ -1,3 +1,4 @@
+#ifdef PSRAM
 #include "psram_spi.h"
 
 static psram_spi_inst_t psram_spi;
@@ -338,3 +339,4 @@ const static uint8_t read_id_command[] = {
 void psram_id(uint8_t rx[8]) {
     pio_spi_write_read_dma_blocking(&psram_spi, read_id_command, sizeof(read_id_command), rx, 8);
 }
+#endif
