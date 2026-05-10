@@ -231,6 +231,8 @@ ELSEIF(ZERO2)
         SDCARD_PIN_SPI0_MOSI=31
         SDCARD_PIN_SPI0_MISO=40
         SDCARD_PIN_SPI0_CS=43
+
+        BUTTER_PSRAM_GPIO=47
     )
 else ()
     target_compile_definitions(${PROJECT_NAME} PRIVATE

@@ -174,6 +174,8 @@ static void footer() {
     draw_text("Freq. - NumPad +/- 4MHz; Ins/Del - 40MHz            ", 0, TEXTMODE_ROWS - 3, 7, 0);
 #if SDCARD_INFO        
     draw_text("F - Flash info; P - PSRAM; D - SD CARD              ", 0, TEXTMODE_ROWS - 2, 7, 0);
+#elif ZERO2
+    draw_text("F - Flash info                                      ", 0, TEXTMODE_ROWS - 2, 7, 0);
 #else
     draw_text("F - Flash info; P - PSRAM                           ", 0, TEXTMODE_ROWS - 2, 7, 0);
 #endif
@@ -1210,12 +1212,14 @@ skip_it:
             get_flash_info();
             footer();
         }
+        #ifndef ZERO2
         else if (pressed_key[HID_KEY_P]) { // P is down (PSRAM info)
             clrScr(0);
             y = 0;
             print_psram_info();
             footer();
         }
+        #endif
         uint32_t nstate = nespad_state;
         uint32_t nstate2 = nespad_state2;
         bool S = isSpeaker();
