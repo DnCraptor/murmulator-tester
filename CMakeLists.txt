@@ -25,8 +25,8 @@ option(SOFTTV "Enable TV soft composite output" OFF)
 option(MURM20 "Murmulator 2.0" OFF)
 option(ZERO2 "RP2350-PiZero" OFF)
 
-set(ZERO2 ON)
-#set(MURM20 ON)
+#set(ZERO2 ON)
+set(MURM20 ON)
 #set(VGA ON)
 #set(HDMI ON)
 #set(TFT ON)
@@ -34,7 +34,7 @@ set(ZERO2 ON)
 #set(TV ON)
 #set(SOFTTV ON)
 
-set(VERSION "1.2.3")
+set(VERSION "1.2.4")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -145,6 +145,8 @@ target_compile_options(${PROJECT_NAME} PUBLIC
         -w
 )
 endif ()
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE DEBUG=1)
 
 if (MURM20)
     target_compile_definitions(${PROJECT_NAME} PRIVATE
@@ -278,7 +280,6 @@ else ()
 
 #        BUTTER_PSRAM_GPIO=19
 #        BUTTER_PSRAM_GPIO=47
-DEBUG=1
 
         PWM_PIN0=26
         PWM_PIN1=27
